@@ -36,7 +36,7 @@ from .work_capacity_dunne import work_capacity_dunne
 from .work_capacity_hothaps import work_capacity_hothaps
 from .work_capacity_iso import work_capacity_iso
 from .work_capacity_niosh import work_capacity_niosh
-
+from .ireq import calc_ireq
 __all__ = [
     "JOS3",
     "Sports",
@@ -79,6 +79,6 @@ __all__ = [
     "work_capacity_niosh",
     "calc_ireq",
 ]
-from .ireq import calc_ireq
+
 
 
