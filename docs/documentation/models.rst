@@ -1,4 +1,4 @@
-Models
+﻿Models
 ======
 
 This section of the documentation provides detailed documentation on the various thermal comfort models, heat and cold indexes implemented in the `pythermalcomfort` package.
@@ -20,7 +20,7 @@ Below are some key characteristics and criteria of the adaptive model, according
   *   There is no mechanical cooling or heating system in operation.
   *   Occupants have metabolic rates ranging from 1.0 to 1.5 met.
   *   Occupants are able to adjust their clothing to indoor or outdoor thermal conditions within a range of 0.5 to 1.0 clo.
-  *   The prevailing mean outdoor temperature is between 10°C (50°F) and 33.5°C (92.3°F).
+  *   The prevailing mean outdoor temperature is between 10掳C (50掳F) and 33.5掳C (92.3掳F).
   *   The space has operable fenestration that can be readily opened and adjusted by the occupants.
 
 **Methodology**: The model uses the prevailing mean outdoor air temperature to determine acceptable indoor operative temperatures. The prevailing mean outdoor temperature is calculated as a running average of the mean daily outdoor temperatures over a period of days.
@@ -131,14 +131,14 @@ Gagge-Ji two-node model
 Heat Index (HI)
 ---------------
 
-The Heat Index (HI) is a commonly used metric to estimate apparent temperature (AT) incorporating the effects of humidity based on Steadman’s model [Steadman1979]_ of human thermoregulation.
+The Heat Index (HI) is a commonly used metric to estimate apparent temperature (AT) incorporating the effects of humidity based on Steadman鈥檚 model [Steadman1979]_ of human thermoregulation.
 
-Lu and Romps (2022) [lu]_ found that Steadman’s model produces unrealistic results under extreme conditions, such as excessively hot and humid or cold and dry environments, rendering the heat index undefined.
-For instance, at 80% relative humidity, the heat index is only valid within a temperature range of 288–304 K.
+Lu and Romps (2022) [lu]_ found that Steadman鈥檚 model produces unrealistic results under extreme conditions, such as excessively hot and humid or cold and dry environments, rendering the heat index undefined.
+For instance, at 80% relative humidity, the heat index is only valid within a temperature range of 288鈥?04 K.
 To address this issue, Lu and Romps (2022) [lu]_ developed a new model that extends the range of validity of the heat index.
 
-pythermalcomfort therefore includes two equations to calculate the Heat Index. One in accordance with the new Lu and Romps (2022) model which is an extension of the first version of Steadman’s (1979) apparent temperature :py:class:`~pythermalcomfort.models.heat_index_lu.heat_index_lu`.
-The other is developed by Rothfusz (1990) and it is a simplified model derived by multiple regression analysis in temperature and relative humidity from the first version of Steadman’s (1979) apparent temperature (AT) [Rothfusz1990]_ :py:class:`~pythermalcomfort.models.heat_index_rothfusz.heat_index_rothfusz`.
+pythermalcomfort therefore includes two equations to calculate the Heat Index. One in accordance with the new Lu and Romps (2022) model which is an extension of the first version of Steadman鈥檚 (1979) apparent temperature :py:class:`~pythermalcomfort.models.heat_index_lu.heat_index_lu`.
+The other is developed by Rothfusz (1990) and it is a simplified model derived by multiple regression analysis in temperature and relative humidity from the first version of Steadman鈥檚 (1979) apparent temperature (AT) [Rothfusz1990]_ :py:class:`~pythermalcomfort.models.heat_index_rothfusz.heat_index_rothfusz`.
 
 Heat Index (HI) Lu and Romps (2022)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -216,7 +216,7 @@ The PMV calculation considers several factors:
   *   **Mean radiant temperature** (`T` :sub:`r`).
   *   **Relative humidity** (RH).
   *   **Relative air velocity** (`V` :sub:`r`), the relative air speed caused by body movement and not the air speed measured by the air speed sensor
-  *   **Metabolic rate** (M), which is the rate of heat production in the body. Metabolic rate data is available in the ASHRAE Handbook—Fundamentals and users should use their judgement to match activities to comparable activities in the table.
+  *   **Metabolic rate** (M), which is the rate of heat production in the body. Metabolic rate data is available in the ASHRAE Handbook鈥擣undamentals and users should use their judgement to match activities to comparable activities in the table.
   *   **Clothing insulation** (`I` :sub:`cl,r`), dynamic intrinsic insulation, this is the thermal insulation from the skin surface to the outer clothing surface, including enclosed air layers, under the environmental conditions.
 
 The PMV model is applicable when the six main parameters are within specific intervals.
@@ -412,3 +412,9 @@ Temperature Humidity Index (THI)
 
 .. autoclass:: pythermalcomfort.classes_return.THI
     :members:
+
+
+Required Clothing Insulation (IREQ) and Duration Limited Exposure (Dlim)
+----------------------------------------------------------------------
+.. autofunction:: pythermalcomfort.models.calc_ireq
+
