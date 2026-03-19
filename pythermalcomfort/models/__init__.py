@@ -1,4 +1,4 @@
-from .adaptive_ashrae import adaptive_ashrae
+﻿from .adaptive_ashrae import adaptive_ashrae
 from .adaptive_en import adaptive_en
 from .ankle_draft import ankle_draft
 from .at import at
@@ -77,6 +77,8 @@ __all__ = [
     "work_capacity_hothaps",
     "work_capacity_iso",
     "work_capacity_niosh",
+    "calc_ireq",
 ]
 from .ireq import calc_ireq
+
 
