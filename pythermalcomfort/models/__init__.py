@@ -78,3 +78,5 @@ __all__ = [
     "work_capacity_iso",
     "work_capacity_niosh",
 ]
+from .ireq import calc_ireq
+

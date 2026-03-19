@@ -1325,3 +1325,40 @@ class SportsHeatStressInputs(BaseInputs):
         # Validate air speed is non-negative
         if np.any(vr < 0):
             raise ValueError("Relative air speed (vr) must be non-negative.")
+
+@dataclass
+class IREQInputs:
+    M: np.ndarray
+    W: np.ndarray
+    ta: np.ndarray
+    tr: np.ndarray
+    p: np.ndarray
+    w: np.ndarray
+    v: np.ndarray
+    rh: np.ndarray
+    clo: np.ndarray
+
+    def __post_init__(self):
+        # Convert all inputs to numpy arrays of floats
+        self.M = np.atleast_1d(self.M).astype(float)
+        self.W = np.atleast_1d(self.W).astype(float)
+        self.ta = np.atleast_1d(self.ta).astype(float)
+        self.tr = np.atleast_1d(self.tr).astype(float)
+        self.p = np.atleast_1d(self.p).astype(float)
+        self.w = np.atleast_1d(self.w).astype(float)
+        self.v = np.atleast_1d(self.v).astype(float)
+        self.rh = np.atleast_1d(self.rh).astype(float)
+        self.clo = np.atleast_1d(self.clo).astype(float)
+
+        # Broadcast all to same shape to allow mixed scalars/arrays
+        self.M, self.W, self.ta, self.tr, self.p, self.w, self.v, self.rh, self.clo = np.broadcast_arrays(
+            self.M, self.W, self.ta, self.tr, self.p, self.w, self.v, self.rh, self.clo
+        )
+
+        # Apply ISO 11079 standard boundaries and limits
+        self.M = np.clip(self.M, 58.0, 400.0)
+        self.ta = np.minimum(self.ta, 10.0)
+
+        w_min_calculated = 0.0052 * (self.M - 58.0)
+        self.w = np.clip(self.w, w_min_calculated, 1.2)
+        self.v = np.clip(self.v, 0.4, 18.0)
