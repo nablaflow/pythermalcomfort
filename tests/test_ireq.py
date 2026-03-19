@@ -5,7 +5,6 @@ from pythermalcomfort.models.ireq import calc_ireq
 
 
 def test_ireq_scalar():
-    """Test scalar inputs matching standard website validation."""
     result = calc_ireq(
         M=175.0,
         W=0.0,
