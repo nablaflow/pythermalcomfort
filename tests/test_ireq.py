@@ -115,4 +115,6 @@ def test_ireq_re_export():
     """Test that calc_ireq is available via the public API export."""
     # This simulates importing from pythermalcomfort.models
     # For now in this isolated snippet, we just assert the function itself is accessible.
-    assert callable(calc_ireq)
+    from pythermalcomfort.models import calc_ireq as public_calc_ireq
+    assert callable(public_calc_ireq)
+

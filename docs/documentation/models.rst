@@ -1,4 +1,4 @@
-ï»¿Models
+Models
 ======
 
 This section of the documentation provides detailed documentation on the various thermal comfort models, heat and cold indexes implemented in the `pythermalcomfort` package.
@@ -20,7 +20,7 @@ Below are some key characteristics and criteria of the adaptive model, according
   *   There is no mechanical cooling or heating system in operation.
   *   Occupants have metabolic rates ranging from 1.0 to 1.5 met.
   *   Occupants are able to adjust their clothing to indoor or outdoor thermal conditions within a range of 0.5 to 1.0 clo.
-  *   The prevailing mean outdoor temperature is between 10Â°C (50Â°F) and 33.5Â°C (92.3Â°F).
+  *   The prevailing mean outdoor temperature is between 10¡ãC (50¡ãF) and 33.5¡ãC (92.3¡ãF).
   *   The space has operable fenestration that can be readily opened and adjusted by the occupants.
 
 **Methodology**: The model uses the prevailing mean outdoor air temperature to determine acceptable indoor operative temperatures. The prevailing mean outdoor temperature is calculated as a running average of the mean daily outdoor temperatures over a period of days.
@@ -134,7 +134,7 @@ Heat Index (HI)
 The Heat Index (HI) is a commonly used metric to estimate apparent temperature (AT) incorporating the effects of humidity based on Steadman's model [Steadman1979]_ of human thermoregulation.
 
 Lu and Romps (2022) [lu]_ found that Steadman's model produces unrealistic results under extreme conditions, such as excessively hot and humid or cold and dry environments, rendering the heat index undefined.
-For instance, at 80% relative humidity, the heat index is only valid within a temperature range of 288-104 K.
+For instance, at 80% relative humidity, the heat index is only valid within a temperature range of 288-304 K.
 To address this issue, Lu and Romps (2022) [lu]_ developed a new model that extends the range of validity of the heat index.
 
 pythermalcomfort therefore includes two equations to calculate the Heat Index. One in accordance with the new Lu and Romps (2022) model which is an extension of the first version of Steadman's (1979) apparent temperature :py:class:`~pythermalcomfort.models.heat_index_lu.heat_index_lu`.
@@ -417,4 +417,5 @@ Temperature Humidity Index (THI)
 Required Clothing Insulation (IREQ) and Duration Limited Exposure (Dlim)
 ----------------------------------------------------------------------
 .. autofunction:: pythermalcomfort.models.ireq.calc_ireq
+
 

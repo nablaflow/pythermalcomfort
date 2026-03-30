@@ -1367,3 +1367,5 @@ class IREQInputs:
             raise ValueError("Air permeability (p) must be greater than 0.")
         if np.any(self.rh < 0) or np.any(self.rh > 100):
             raise ValueError("Relative humidity (rh) must be between 0 and 100.")
+        if np.any(self.clo < 0):
+            raise ValueError("Clothing insulation (clo) must be non-negative.")

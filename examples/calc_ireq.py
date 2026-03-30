@@ -4,7 +4,7 @@ import os
 # Adjust path to allow local imports if needed
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from pythermalcomfort.models.ireq import calc_ireq
+from pythermalcomfort.models import calc_ireq
 
 if __name__ == "__main__":
     # Test 1: Single Scalar Input (matching your previous test)
@@ -39,3 +39,4 @@ if __name__ == "__main__":
     print("\n--- [Test 2] Vectorized Array Input Results (List processing) ---")
     res_array = calc_ireq(**params_array)
     print(res_array)
+
