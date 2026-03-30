@@ -1,5 +1,6 @@
-﻿import numpy as np
-from typing import Union
+import numpy as np
+from typing import Union, Dict, Any, List
+
 from pythermalcomfort.classes_input import IREQInputs
 from pythermalcomfort.classes_return import IREQResult
 
@@ -11,7 +12,7 @@ def calc_ireq(M: Union[float, list, np.ndarray],
               w: Union[float, list, np.ndarray],
               v: Union[float, list, np.ndarray],
               rh: Union[float, list, np.ndarray],
-              clo: Union[float, list, np.ndarray]) -> IREQResult:
+              clo: Union[float, list, np.ndarray]) -> 'IREQResult':
     """
     Calculates the Required Clothing Insulation (IREQ) and Duration Limited Exposure (DLE) 
     based on ISO 11079.
@@ -42,6 +43,27 @@ def calc_ireq(M: Union[float, list, np.ndarray],
     IREQResult
         A dataclass containing the calculated IREQ, ICL, and DLE for both 
         minimal and neutral conditions.
+
+    Applicability
+    -------------
+    * Metabolic rate: 58 to 400 W/m²
+    * Ambient air temperature: <= 10 °C
+    * Relative air velocity: 0.4 to 18 m/s
+    * Relative humidity: 0 to 100%
+
+    Raises
+    ------
+    ValueError
+        If inputs are outside the valid domains (e.g., p <= 0, rh < 0).
+
+    Examples
+    --------
+    .. code-block:: python
+
+        from pythermalcomfort.models import calc_ireq
+        
+        result = calc_ireq(M=175.0, W=0.0, ta=-15.0, tr=-15.0, p=50.0, w=1.1, v=2.0, rh=55.0, clo=2.8)
+        print(result.IREQminimal)
 
     References
     ----------
@@ -165,7 +187,8 @@ def calc_ireq(M: Union[float, list, np.ndarray],
             S = np.where(active_S, S_new, S)
             factor_S = np.where(active_S, factor_S_new, factor_S)
 
-        DLE = -40.0 / S
+        with np.errstate(divide='ignore'):
+            DLE = -40.0 / S
         
         # --- 5. Store and format results ---
         constant_part = 0.54 * np.exp(-0.15 * v_val - 0.22 * w_val) * (p_val**0.075) - 0.06 * np.log(p_val) + 0.5
@@ -176,16 +199,16 @@ def calc_ireq(M: Union[float, list, np.ndarray],
         ICL_raw = ((IREQ_final + Ia / fcl_final) / constant_part - 0.085 / fcl_final)
         ICL_out = np.round((ICL_raw / 0.155) * 10.0) / 10.0
         
-        DLE_out = np.where(S > -8, "more than 8", np.round(DLE, 1).astype(str)).astype(object)
+        DLE_out = np.empty(DLE.shape, dtype=object)
+        condition = (DLE > 8.0) | (DLE < 0)
+        DLE_out[condition] = "more than 8"
+        DLE_out[~condition] = np.round(DLE[~condition], 1)
 
         # Unpack back to scalar if input was scalar
         if is_scalar:
             IREQ_out = float(IREQ_out[0])
             ICL_out = float(ICL_out[0])
-            dle_scalar = DLE_out[0]
-            if dle_scalar != "more than 8":
-                dle_scalar = float(dle_scalar)
-            DLE_out = dle_scalar
+            DLE_out = DLE_out[0]
         else:
             DLE_out = DLE_out.tolist()
 

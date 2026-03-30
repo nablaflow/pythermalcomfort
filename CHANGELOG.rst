@@ -34,9 +34,9 @@
     - removed outputs: ``water_loss``, ``water_loss_watt``
     - added outputs (with units):
 
-        * ``sweat_loss_g`` [g] 鈥?cumulative sweat mass per person (not area鈥憂ormalised)
-        * ``sweat_rate_watt`` [W路m鈦宦瞉 鈥?instantaneous evaporative heat flux at skin
-        * ``evap_load_wm2_min`` [W路min路m鈦宦瞉 鈥?accumulated evaporative load for chaining
+        * ``sweat_loss_g`` [g] -cumulative sweat mass per person (not area-normalised)
+        * ``sweat_rate_watt`` [W/m²] -instantaneous evaporative heat flux at skin
+        * ``evap_load_wm2_min`` [W*min/m²] -accumulated evaporative load for chaining
 
     Migration:
 
@@ -48,7 +48,7 @@
         # >= 3.6.0
         grams = res.sweat_loss_g
         w_m2 = res.sweat_rate_watt
-        carry = res.evap_load_wm2_min  # for multi鈥憇egment runs
+        carry = res.evap_load_wm2_min  # for multi-segment runs
 
 
 3.5.1 (2025-09-15)
@@ -106,7 +106,7 @@
 3.1.0 (2025-04-28)
 -------------------
 * Updated the PHS model in compliance with the ISO 7933:2023 standard
-    - Added default鈥慿warg overrides for 2023 mode (f_r, t_re, t_cr_eq)
+    - Added default-慿warg overrides for 2023 mode (f_r, t_re, t_cr_eq)
     - removed unused variable `round` from `default_kwargs`
 * Included test cases according to the ISO 7933:2023 standard
 * Added `AutoStrMixin` to provide a formatted `__str__` representation for result classes

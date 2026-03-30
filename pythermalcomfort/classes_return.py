@@ -1072,16 +1072,7 @@ class SportsHeatStressRisk(AutoStrMixin):
     recommendation: str | list[str]
 
 @dataclass
-class IREQResult:
-    IREQminimal: Union[float, np.ndarray]
-    ICLminimal: Union[float, np.ndarray]
-    DLEminimal: Union[str, float, np.ndarray, list]
-    IREQneutral: Union[float, np.ndarray]
-    ICLneutral: Union[float, np.ndarray]
-    DLEneutral: Union[str, float, np.ndarray, list]
-
-@dataclass
-class IREQResult:
+class IREQResult(AutoStrMixin):
     IREQminimal: Union[float, np.ndarray]
     ICLminimal: Union[float, np.ndarray]
     DLEminimal: Union[str, float, np.ndarray, list]

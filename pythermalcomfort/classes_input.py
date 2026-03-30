@@ -1362,3 +1362,8 @@ class IREQInputs:
         w_min_calculated = 0.0052 * (self.M - 58.0)
         self.w = np.clip(self.w, w_min_calculated, 1.2)
         self.v = np.clip(self.v, 0.4, 18.0)
+        
+        if np.any(self.p <= 0):
+            raise ValueError("Air permeability (p) must be greater than 0.")
+        if np.any(self.rh < 0) or np.any(self.rh > 100):
+            raise ValueError("Relative humidity (rh) must be between 0 and 100.")

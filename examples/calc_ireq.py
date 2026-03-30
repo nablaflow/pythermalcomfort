@@ -1,38 +1,41 @@
-﻿import pprint
-from pythermalcomfort.models import calc_ireq
+import sys
+import os
 
-def main():
-    print("-------------------------------------------------------------")
-    print("Example 1: Single values calculation (ISO 11079)")
-    print("-------------------------------------------------------------")
-    result_scalar = calc_ireq(
-        M=175.0,     # Metabolic energy production (W/m2)
-        W=0.0,       # Rate of mechanical work (W/m2)
-        ta=-15.0,    # Ambient air temperature (C)
-        tr=-15.0,    # Mean radiant temperature (C)
-        p=50.0,      # Air permeability (l/m2s)
-        w=1.1,       # Walking speed (m/s)
-        v=2.0,       # Relative air velocity (m/s)
-        rh=55.0,     # Relative humidity (%)
-        clo=2.8      # Available basic clothing insulation (clo)
-    )
-    pprint.pprint(result_scalar)
+# Adjust path to allow local imports if needed
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from pythermalcomfort.models.ireq import calc_ireq
+
+if __name__ == "__main__":
+    # Test 1: Single Scalar Input (matching your previous test)
+    params = {
+        "M": 175.0,
+        "W": 0.0,
+        "ta": -15.0,
+        "tr": -15.0,
+        "p": 50.0,
+        "w": 1.1,
+        "v": 2.0,
+        "rh": 55.0,
+        "clo": 2.8
+    }
     
-    print("\n-------------------------------------------------------------")
-    print("Example 2: Equivalent calculation with vectorized array inputs")
-    print("-------------------------------------------------------------")
-    result_array = calc_ireq(
-        M=[175.0, 116.0],
-        W=[0.0, 0.0],
-        ta=[-15.0, -10.0],
-        tr=[-15.0, -10.0],
-        p=[50.0, 8.0],
-        w=[1.1, 0.3],
-        v=[2.0, 0.5],
-        rh=[55.0, 50.0],
-        clo=[2.8, 1.5],
-    )
-    pprint.pprint(result_array)
-
-if __name__ == '__main__':
-    main()
+    print("--- [Test 1] Scalar Input Results ---")
+    res_scalar = calc_ireq(**params)
+    print(res_scalar)
+    
+    # Test 2: Multi-value Vectorized Input (e.g. an entire Excel column)
+    params_array = {
+        "M": [175.0, 116.0],
+        "W": [0.0, 0.0],
+        "ta": [-15.0, -10.0],
+        "tr": [-15.0, -10.0],
+        "p": [50.0, 8.0],
+        "w": [1.1, 0.3],
+        "v": [2.0, 0.5],
+        "rh": [55.0, 50.0],
+        "clo": [2.8, 1.5]
+    }
+    print("\n--- [Test 2] Vectorized Array Input Results (List processing) ---")
+    res_array = calc_ireq(**params_array)
+    print(res_array)
