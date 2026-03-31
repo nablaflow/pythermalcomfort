@@ -49,7 +49,8 @@ def test_ireq_array():
     # Assert return types and shapes
     assert isinstance(result.IREQminimal, (list, np.ndarray))
     assert len(result.IREQminimal) == 2
-    assert isinstance(result.DLEminimal, list)
+    assert isinstance(result.DLEminimal, (list, np.ndarray))
+    assert len(result.DLEminimal) == 2
     
     # Assert values for the first index are identical to scalar test
     assert pytest.approx(result.IREQminimal[0], abs=0.1) == 1.6

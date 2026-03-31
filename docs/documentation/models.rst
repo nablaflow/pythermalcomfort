@@ -137,8 +137,8 @@ Lu and Romps (2022) [lu]_ found that Steadman's model produces unrealistic resul
 For instance, at 80% relative humidity, the heat index is only valid within a temperature range of 288-304 K.
 To address this issue, Lu and Romps (2022) [lu]_ developed a new model that extends the range of validity of the heat index.
 
-pythermalcomfort therefore includes two equations to calculate the Heat Index. One in accordance with the new Lu and Romps (2022) model which is an extension of the first version of Steadman's (1979) apparent temperature :py:class:`~pythermalcomfort.models.heat_index_lu.heat_index_lu`.
-The other is developed by Rothfusz (1990) and it is a simplified model derived by multiple regression analysis in temperature and relative humidity from the first version of Steadman's (1979) apparent temperature (AT) [Rothfusz1990]_ :py:class:`~pythermalcomfort.models.heat_index_rothfusz.heat_index_rothfusz`.
+pythermalcomfort therefore includes two equations to calculate the Heat Index. One in accordance with the new Lu and Romps (2022) model which is an extension of the first version of Steadman's (1979) apparent temperature :py:func:`~pythermalcomfort.models.heat_index_lu.heat_index_lu`.
+The other is developed by Rothfusz (1990) and it is a simplified model derived by multiple regression analysis in temperature and relative humidity from the first version of Steadman's (1979) apparent temperature (AT) [Rothfusz1990]_ :py:func:`~pythermalcomfort.models.heat_index_rothfusz.heat_index_rothfusz`.
 
 Heat Index (HI) Lu and Romps (2022)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
