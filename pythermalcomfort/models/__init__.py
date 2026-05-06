@@ -1,4 +1,4 @@
-﻿from .adaptive_ashrae import adaptive_ashrae
+from .adaptive_ashrae import adaptive_ashrae
 from .adaptive_en import adaptive_en
 from .ankle_draft import ankle_draft
 from .at import at
@@ -9,6 +9,7 @@ from .esi import esi
 from .heat_index_lu import heat_index_lu
 from .heat_index_rothfusz import heat_index_rothfusz
 from .humidex import humidex
+from .ireq import ireq
 from .jos3 import JOS3
 from .net import net
 from .pet_steady import pet_steady
@@ -36,7 +37,7 @@ from .work_capacity_dunne import work_capacity_dunne
 from .work_capacity_hothaps import work_capacity_hothaps
 from .work_capacity_iso import work_capacity_iso
 from .work_capacity_niosh import work_capacity_niosh
-from .ireq import calc_ireq
+
 __all__ = [
     "JOS3",
     "Sports",
@@ -51,6 +52,7 @@ __all__ = [
     "heat_index_lu",
     "heat_index_rothfusz",
     "humidex",
+    "ireq",
     "net",
     "pet_steady",
     "phs",
@@ -77,8 +79,4 @@ __all__ = [
     "work_capacity_hothaps",
     "work_capacity_iso",
     "work_capacity_niosh",
-    "calc_ireq",
 ]
-
-
-

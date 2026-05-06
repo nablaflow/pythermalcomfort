@@ -1071,11 +1071,30 @@ class SportsHeatStressRisk(AutoStrMixin):
     t_extreme: float | list[float]
     recommendation: str | list[str]
 
-@dataclass
-class IREQResult(AutoStrMixin):
-    IREQminimal: Union[float, np.ndarray]
-    ICLminimal: Union[float, np.ndarray]
-    DLEminimal: Union[str, float, np.ndarray, list]
-    IREQneutral: Union[float, np.ndarray]
-    ICLneutral: Union[float, np.ndarray]
-    DLEneutral: Union[str, float, np.ndarray, list]
+
+@dataclass(frozen=True, repr=False)
+class IREQ(AutoStrMixin):
+    """Dataclass to represent the IREQ calculation results.
+
+    Attributes
+    ----------
+    ireq_min : float or list of floats
+        Minimal required clothing insulation, [clo].
+    ireq_neutral : float or list of floats
+        Neutral required clothing insulation, [clo].
+    icl_min : float or list of floats
+        Minimal intrinsic clothing insulation, [clo].
+    icl_neutral : float or list of floats
+        Neutral intrinsic clothing insulation, [clo].
+    dle_min : str, float, or list
+        Duration limited exposure for the minimal criterion, [h].
+    dle_neutral : str, float, or list
+        Duration limited exposure for the neutral criterion, [h].
+    """
+
+    ireq_min: npt.ArrayLike
+    ireq_neutral: npt.ArrayLike
+    icl_min: npt.ArrayLike
+    icl_neutral: npt.ArrayLike
+    dle_min: str | float | np.ndarray
+    dle_neutral: str | float | np.ndarray

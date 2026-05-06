@@ -1,227 +1,388 @@
+from __future__ import annotations
+
 import numpy as np
-from typing import Union, Dict, Any, List
 
 from pythermalcomfort.classes_input import IREQInputs
-from pythermalcomfort.classes_return import IREQResult
+from pythermalcomfort.classes_return import IREQ
+from pythermalcomfort.utilities import met_to_w_m2
 
-def calc_ireq(M: Union[float, list, np.ndarray],
-              W: Union[float, list, np.ndarray],
-              ta: Union[float, list, np.ndarray],
-              tr: Union[float, list, np.ndarray],
-              p: Union[float, list, np.ndarray],
-              w: Union[float, list, np.ndarray],
-              v: Union[float, list, np.ndarray],
-              rh: Union[float, list, np.ndarray],
-              clo: Union[float, list, np.ndarray]) -> 'IREQResult':
-    """
-    Calculates the Required Clothing Insulation (IREQ) and Duration Limited Exposure (DLE) 
-    based on ISO 11079.
+
+def ireq(
+    tdb,
+    tr,
+    v,
+    rh,
+    met,
+    clo,
+    p,
+    walk_sp,
+    wme=0,
+    limit_inputs=True,
+    round_output=True,
+) -> IREQ:
+    """Calculate Required Clothing Insulation (IREQ) and exposure duration.
+
+    The model estimates the clothing insulation required to maintain thermal
+    equilibrium in cold environments and the Duration Limited Exposure (DLE)
+    when available clothing insulation is insufficient.
 
     Parameters
     ----------
-    M : float | list | np.ndarray
-        Metabolic energy production, [W/m2]
-    W : float | list | np.ndarray
-        Rate of mechanical work, [W/m2]
-    ta : float | list | np.ndarray
-        Ambient air temperature, [<10 C]
-    tr : float | list | np.ndarray
-        Mean radiant temperature, [C]
-    p : float | list | np.ndarray
-        Air permeability, [l/m2s]
-    w : float | list | np.ndarray
-        Walking speed, [m/s]
-    v : float | list | np.ndarray
-        Relative air velocity, [0.4 to 18 m/s]
-    rh : float | list | np.ndarray
-        Relative humidity, [%]
-    clo : float | list | np.ndarray
-        Available basic clothing insulation, [clo]
+    tdb : float or list of floats
+        Dry bulb air temperature, [deg C].
+    tr : float or list of floats
+        Mean radiant temperature, [deg C].
+    v : float or list of floats
+        Relative air velocity, [m/s].
+    rh : float or list of floats
+        Relative humidity, [%].
+    met : float or list of floats
+        Metabolic rate, [met].
+    clo : float or list of floats
+        Clothing insulation, [clo].
+    p : float or list of floats
+        Air permeability of clothing, [l/(m2 s)].
+    walk_sp : float or list of floats
+        Walking speed, [m/s].
+    wme : float or list of floats, optional
+        External work, [met]. Defaults to 0.
+    limit_inputs : bool, optional
+        When True, results outside the ISO 11079 applicability limits are set
+        to nan. Non-physical negative clothing insulation outputs are also set
+        to nan. Defaults to True.
+    round_output : bool, optional
+        When True, rounds numeric output values to one decimal place. Defaults
+        to True.
 
     Returns
     -------
-    IREQResult
-        A dataclass containing the calculated IREQ, ICL, and DLE for both 
-        minimal and neutral conditions.
-
-    Applicability
-    -------------
-    * Metabolic rate: 58 to 400 W/m²
-    * Ambient air temperature: <= 10 °C
-    * Relative air velocity: 0.4 to 18 m/s
-    * Relative humidity: 0 to 100%
-
-    Raises
-    ------
-    ValueError
-        If inputs are outside the valid domains (e.g., p <= 0, rh < 0).
-
-    Examples
-    --------
-    .. code-block:: python
-
-        from pythermalcomfort.models import calc_ireq
-        
-        result = calc_ireq(M=175.0, W=0.0, ta=-15.0, tr=-15.0, p=50.0, w=1.1, v=2.0, rh=55.0, clo=2.8)
-        print(result.IREQminimal)
+    IREQ
+        A dataclass containing ``ireq_min``, ``ireq_neutral``, ``icl_min``,
+        ``icl_neutral``, ``dle_min``, and ``dle_neutral``.
 
     References
     ----------
     ISO 11079:2007 Standard
     """
-    # Check if inputs are all scalar to correctly format the output later
-    is_scalar = np.isscalar(M) and np.isscalar(W) and np.isscalar(ta) and \
-                np.isscalar(tr) and np.isscalar(p) and np.isscalar(w) and \
-                np.isscalar(v) and np.isscalar(rh) and np.isscalar(clo)
 
-    # Validate and normalize inputs through the input dataclass
-    inp = IREQInputs(M=M, W=W, ta=ta, tr=tr, p=p, w=w, v=v, rh=rh, clo=clo)
-    M_val, W_val, ta_val, tr_val, p_val, w_val, v_val, rh_val, clo_val = (
-        inp.M, inp.W, inp.ta, inp.tr, inp.p, inp.w, inp.v, inp.rh, inp.clo
+    is_scalar = all(
+        np.isscalar(value) for value in [tdb, tr, v, rh, met, clo, p, walk_sp, wme]
     )
 
-    clo_m2cw = clo_val * 0.155
-    Ia = 0.092 * np.exp(-0.15 * v_val - 0.22 * w_val) - 0.0045
+    inputs = IREQInputs(
+        tdb=tdb,
+        tr=tr,
+        v=v,
+        rh=rh,
+        met=met,
+        clo=clo,
+        p=p,
+        walk_sp=walk_sp,
+        wme=wme,
+        limit_inputs=limit_inputs,
+        round_output=round_output,
+    )
 
-    Tex = 29.0 + 0.2 * ta_val
-    Pex = 0.1333 * np.exp(18.6686 - 4030.183 / (Tex + 235.0))
-    Pa = (rh_val / 100.0) * 0.1333 * np.exp(18.6686 - 4030.183 / (ta_val + 235.0))
-    
-    ArAdu = 0.77
-    results_dict = {}
+    tdb = inputs.tdb
+    tr = inputs.tr
+    v = inputs.v
+    rh = inputs.rh
+    clo = inputs.clo
+    p = inputs.p
+    walk_sp = inputs.walk_sp
+    met = inputs.met * met_to_w_m2
+    wme = inputs.wme * met_to_w_m2
 
-    for calculation in [1, 2]:
+    valid_inputs = _valid_iso_11079_inputs(
+        met=met,
+        tdb=tdb,
+        v=v,
+        walk_sp=walk_sp,
+    )
+
+    clo_m2c_w = clo * 0.155
+    air_insulation = 0.092 * np.exp(-0.15 * v - 0.22 * walk_sp) - 0.0045
+
+    expired_air_temperature = 29.0 + 0.2 * tdb
+    expired_air_vapor_pressure = 0.1333 * np.exp(
+        18.6686 - 4030.183 / (expired_air_temperature + 235.0)
+    )
+    ambient_vapor_pressure = (
+        (rh / 100.0) * 0.1333 * np.exp(18.6686 - 4030.183 / (tdb + 235.0))
+    )
+
+    ar_adu = 0.77
+    results = {}
+
+    for calculation in (1, 2):
         if calculation == 1:
-            Tsk = 33.34 - 0.0354 * M_val
-            wetness = np.full_like(M_val, 0.06)
+            skin_temperature = 33.34 - 0.0354 * met
+            wetness = np.full_like(met, 0.06)
+            suffix = "min"
         else:
-            Tsk = 35.7 - 0.0285 * M_val
-            wetness = 0.001 * M_val
+            skin_temperature = 35.7 - 0.0285 * met
+            wetness = 0.001 * met
+            suffix = "neutral"
 
-        Psks = 0.1333 * np.exp(18.6686 - 4030.183 / (Tsk + 235.0))
+        skin_saturated_pressure = 0.1333 * np.exp(
+            18.6686 - 4030.183 / (skin_temperature + 235.0)
+        )
 
-        # --- 3. Vectorized Iteration to find IREQ ---
-        IREQ = np.full_like(M_val, 0.5)
-        factor = np.full_like(M_val, 0.5)
-        balance = np.full_like(M_val, 1.0)
+        ireq_clo = np.full_like(met, 0.5)
+        factor = np.full_like(met, 0.5)
+        balance = np.full_like(met, 1.0)
 
         for _ in range(150):
             active = np.abs(balance) > 0.01
             if not np.any(active):
                 break
 
-            fcl = 1.0 + 1.197 * IREQ
-            Rt = (0.06 / 0.38) * (Ia + IREQ)
-            E = wetness * (Psks - Pa) / Rt
-            Hres = 1.73e-02 * M_val * (Pex - Pa) + 1.4e-03 * M_val * (Tex - ta_val)
-            
-            Tcl = Tsk - IREQ * (M_val - W_val - E - Hres)
-            
-            Tcl_K = 273.0 + Tcl
-            tr_K = 273.0 + tr_val
-            
-            dT = Tcl - tr_val
-            dT_safe = np.where(np.abs(dT) < 1e-4, 1e-4, dT)
-            
-            # Use np.where to handle zero division fallback
-            hr_norm = (5.67e-08 * 0.95 * ArAdu * (Tcl_K**4 - tr_K**4)) / dT_safe
-            hr_fallback = 5.67e-08 * 0.95 * ArAdu * 4 * (273.0 + (Tcl + tr_val) / 2.0)**3
-            hr = np.where(np.abs(dT) < 1e-4, hr_fallback, hr_norm)
-            
-            hc = 1.0 / Ia - hr
-            R = fcl * hr * (Tcl - tr_val)
-            C = fcl * hc * (Tcl - ta_val)
-            
-            balance = M_val - W_val - E - Hres - R - C
-            
+            fcl = 1.0 + 1.197 * ireq_clo
+            total_evaporative_resistance = (0.06 / 0.38) * (air_insulation + ireq_clo)
+            evaporative_heat_loss = (
+                wetness
+                * (skin_saturated_pressure - ambient_vapor_pressure)
+                / total_evaporative_resistance
+            )
+            respiratory_heat_loss = 1.73e-02 * met * (
+                expired_air_vapor_pressure - ambient_vapor_pressure
+            ) + 1.4e-03 * met * (expired_air_temperature - tdb)
+
+            clothing_temperature = skin_temperature - ireq_clo * (
+                met - wme - evaporative_heat_loss - respiratory_heat_loss
+            )
+            clothing_temperature_k = 273.0 + clothing_temperature
+            tr_k = 273.0 + tr
+
+            delta_t = clothing_temperature - tr
+            delta_t_safe = np.where(np.abs(delta_t) < 1e-4, 1e-4, delta_t)
+            hr_norm = (
+                5.67e-08 * 0.95 * ar_adu * (clothing_temperature_k**4 - tr_k**4)
+            ) / delta_t_safe
+            hr_fallback = (
+                5.67e-08
+                * 0.95
+                * ar_adu
+                * 4
+                * (273.0 + (clothing_temperature + tr) / 2.0) ** 3
+            )
+            radiation_coefficient = np.where(
+                np.abs(delta_t) < 1e-4,
+                hr_fallback,
+                hr_norm,
+            )
+
+            convection_coefficient = 1.0 / air_insulation - radiation_coefficient
+            radiation_heat_loss = (
+                fcl * radiation_coefficient * (clothing_temperature - tr)
+            )
+            convective_heat_loss = (
+                fcl * convection_coefficient * (clothing_temperature - tdb)
+            )
+
+            balance = (
+                met
+                - wme
+                - evaporative_heat_loss
+                - respiratory_heat_loss
+                - radiation_heat_loss
+                - convective_heat_loss
+            )
+
             cond = balance > 0
-            IREQ_new = np.where(cond, IREQ - factor, IREQ + factor)
+            ireq_clo_new = np.where(cond, ireq_clo - factor, ireq_clo + factor)
             factor_new = np.where(cond, factor / 2.0, factor)
-            
-            IREQ = np.where(active, IREQ_new, IREQ)
+
+            ireq_clo = np.where(active, ireq_clo_new, ireq_clo)
             factor = np.where(active, factor_new, factor)
 
-        IREQ_final = (Tsk - Tcl) / (R + C)
+        ireq_final = (skin_temperature - clothing_temperature) / (
+            radiation_heat_loss + convective_heat_loss
+        )
 
-        # --- 4. Vectorized Iteration to find DLE ---
-        Tcl_S = np.copy(ta_val)
-        S = np.full_like(M_val, -40.0)
-        factor_S = np.full_like(M_val, 500.0)
-        Iclr = np.copy(clo_m2cw)
-        balance_S = np.full_like(M_val, 1.0)
-        
+        clothing_temperature_storage = np.copy(tdb)
+        storage = np.full_like(met, -40.0)
+        storage_factor = np.full_like(met, 500.0)
+        resultant_clothing_insulation = np.copy(clo_m2c_w)
+        storage_balance = np.full_like(met, 1.0)
+
         for _ in range(150):
-            active_S = np.abs(balance_S) > 0.01
-            if not np.any(active_S):
+            active_storage = np.abs(storage_balance) > 0.01
+            if not np.any(active_storage):
                 break
-                
-            fcl_S = 1.0 + 1.197 * Iclr
-            Iclr = ((clo_m2cw + 0.085 / fcl_S) * (0.54 * np.exp(-0.15 * v_val - 0.22 * w_val) * (p_val**0.075) - 0.06 * np.log(p_val) + 0.5) -
-                    (0.092 * np.exp(-0.15 * v_val - 0.22 * w_val) - 0.0045) / fcl_S)
-            
-            Rt = (0.06 / 0.38) * (Ia + Iclr)
-            E = wetness * (Psks - Pa) / Rt
-            Hres = 1.73e-02 * M_val * (Pex - Pa) + 1.4e-03 * M_val * (Tex - ta_val)
-            
-            Tcl_S = Tsk - Iclr * (M_val - W_val - E - Hres - S)
-            
-            Tcl_K = 273.0 + Tcl_S
-            tr_K = 273.0 + tr_val
-            
-            dT = Tcl_S - tr_val
-            dT_safe = np.where(np.abs(dT) < 1e-4, 1e-4, dT)
-            hr_norm_S = (5.67e-08 * 0.95 * ArAdu * (Tcl_K**4 - tr_K**4)) / dT_safe
-            hr_fallback_S = 5.67e-08 * 0.95 * ArAdu * 4 * (273.0 + (Tcl_S + tr_val) / 2.0)**3
-            hr_S = np.where(np.abs(dT) < 1e-4, hr_fallback_S, hr_norm_S)
-            
-            hc_S = 1.0 / Ia - hr_S
-            R_S = fcl_S * hr_S * (Tcl_S - tr_val)
-            C_S = fcl_S * hc_S * (Tcl_S - ta_val)
-            
-            balance_S = M_val - W_val - E - Hres - R_S - C_S - S
-            
-            cond_S = balance_S > 0
-            S_new = np.where(cond_S, S + factor_S, S - factor_S)
-            factor_S_new = np.where(cond_S, factor_S / 2.0, factor_S)
-            
-            S = np.where(active_S, S_new, S)
-            factor_S = np.where(active_S, factor_S_new, factor_S)
 
-        with np.errstate(divide='ignore'):
-            DLE = -40.0 / S
-        
-        # --- 5. Store and format results ---
-        constant_part = 0.54 * np.exp(-0.15 * v_val - 0.22 * w_val) * (p_val**0.075) - 0.06 * np.log(p_val) + 0.5
-        
-        IREQ_out = np.round((IREQ_final / 0.155) * 10.0) / 10.0
-        
-        fcl_final = 1.0 + 1.197 * IREQ_final
-        ICL_raw = ((IREQ_final + Ia / fcl_final) / constant_part - 0.085 / fcl_final)
-        ICL_out = np.round((ICL_raw / 0.155) * 10.0) / 10.0
-        
-        DLE_out = np.empty(DLE.shape, dtype=object)
-        condition = (DLE > 8.0) | (DLE < 0)
-        DLE_out[condition] = "more than 8"
-        DLE_out[~condition] = np.round(DLE[~condition], 1)
+            fcl_storage = 1.0 + 1.197 * resultant_clothing_insulation
+            constant_part = _clothing_constant_part(
+                p=p,
+                v=v,
+                walk_sp=walk_sp,
+            )
+            resultant_clothing_insulation = (
+                clo_m2c_w + 0.085 / fcl_storage
+            ) * constant_part - air_insulation / fcl_storage
 
-        # Unpack back to scalar if input was scalar
-        if is_scalar:
-            IREQ_out = float(IREQ_out[0])
-            ICL_out = float(ICL_out[0])
-            DLE_out = DLE_out[0]
-        else:
-            DLE_out = DLE_out.tolist()
+            total_evaporative_resistance = (0.06 / 0.38) * (
+                air_insulation + resultant_clothing_insulation
+            )
+            evaporative_heat_loss = (
+                wetness
+                * (skin_saturated_pressure - ambient_vapor_pressure)
+                / total_evaporative_resistance
+            )
+            respiratory_heat_loss = 1.73e-02 * met * (
+                expired_air_vapor_pressure - ambient_vapor_pressure
+            ) + 1.4e-03 * met * (expired_air_temperature - tdb)
 
-        postfix = "minimal" if calculation == 1 else "neutral"
-        results_dict[f"IREQ{postfix}"] = IREQ_out
-        results_dict[f"ICL{postfix}"] = ICL_out
-        results_dict[f"DLE{postfix}"] = DLE_out
+            clothing_temperature_storage = skin_temperature - (
+                resultant_clothing_insulation
+                * (met - wme - evaporative_heat_loss - respiratory_heat_loss - storage)
+            )
+            clothing_temperature_k = 273.0 + clothing_temperature_storage
+            tr_k = 273.0 + tr
 
-    return IREQResult(
-        IREQminimal=results_dict["IREQminimal"],
-        ICLminimal=results_dict["ICLminimal"],
-        DLEminimal=results_dict["DLEminimal"],
-        IREQneutral=results_dict["IREQneutral"],
-        ICLneutral=results_dict["ICLneutral"],
-        DLEneutral=results_dict["DLEneutral"]
+            delta_t = clothing_temperature_storage - tr
+            delta_t_safe = np.where(np.abs(delta_t) < 1e-4, 1e-4, delta_t)
+            hr_norm_storage = (
+                5.67e-08 * 0.95 * ar_adu * (clothing_temperature_k**4 - tr_k**4)
+            ) / delta_t_safe
+            hr_fallback_storage = (
+                5.67e-08
+                * 0.95
+                * ar_adu
+                * 4
+                * (273.0 + (clothing_temperature_storage + tr) / 2.0) ** 3
+            )
+            radiation_coefficient_storage = np.where(
+                np.abs(delta_t) < 1e-4,
+                hr_fallback_storage,
+                hr_norm_storage,
+            )
+
+            convection_coefficient_storage = (
+                1.0 / air_insulation - radiation_coefficient_storage
+            )
+            radiation_heat_loss_storage = (
+                fcl_storage
+                * radiation_coefficient_storage
+                * (clothing_temperature_storage - tr)
+            )
+            convective_heat_loss_storage = (
+                fcl_storage
+                * convection_coefficient_storage
+                * (clothing_temperature_storage - tdb)
+            )
+
+            storage_balance = (
+                met
+                - wme
+                - evaporative_heat_loss
+                - respiratory_heat_loss
+                - radiation_heat_loss_storage
+                - convective_heat_loss_storage
+                - storage
+            )
+
+            cond_storage = storage_balance > 0
+            storage_new = np.where(
+                cond_storage,
+                storage + storage_factor,
+                storage - storage_factor,
+            )
+            storage_factor_new = np.where(
+                cond_storage,
+                storage_factor / 2.0,
+                storage_factor,
+            )
+
+            storage = np.where(active_storage, storage_new, storage)
+            storage_factor = np.where(
+                active_storage,
+                storage_factor_new,
+                storage_factor,
+            )
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            dle = -40.0 / storage
+
+        constant_part = _clothing_constant_part(
+            p=p,
+            v=v,
+            walk_sp=walk_sp,
+        )
+
+        ireq_out = ireq_final / 0.155
+        fcl_final = 1.0 + 1.197 * ireq_final
+        icl_raw = (ireq_final + air_insulation / fcl_final) / constant_part - (
+            0.085 / fcl_final
+        )
+        icl_out = icl_raw / 0.155
+
+        non_physical = (ireq_out < 0) | (icl_out < 0)
+        ireq_out[non_physical] = np.nan
+        icl_out[non_physical] = np.nan
+
+        if round_output:
+            ireq_out = np.round(ireq_out, 1)
+            icl_out = np.round(icl_out, 1)
+
+        dle_out = _format_dle(dle=dle, round_output=round_output)
+
+        if limit_inputs:
+            ireq_out[~valid_inputs] = np.nan
+            icl_out[~valid_inputs] = np.nan
+            dle_out[~valid_inputs] = np.nan
+
+        dle_out[non_physical] = np.nan
+
+        results[f"ireq_{suffix}"] = _scalar(ireq_out) if is_scalar else ireq_out
+        results[f"icl_{suffix}"] = _scalar(icl_out) if is_scalar else icl_out
+        results[f"dle_{suffix}"] = _scalar(dle_out) if is_scalar else dle_out
+
+    return IREQ(
+        ireq_min=results["ireq_min"],
+        ireq_neutral=results["ireq_neutral"],
+        icl_min=results["icl_min"],
+        icl_neutral=results["icl_neutral"],
+        dle_min=results["dle_min"],
+        dle_neutral=results["dle_neutral"],
     )
+
+
+def _clothing_constant_part(p, v, walk_sp):
+    return (
+        0.54 * np.exp(-0.15 * v - 0.22 * walk_sp) * (p**0.075) - 0.06 * np.log(p) + 0.5
+    )
+
+
+def _valid_iso_11079_inputs(met, tdb, v, walk_sp):
+    minimum_walking_speed = np.minimum(0.0052 * (met - 58.0), 1.2)
+
+    return (
+        (met >= 58.0)
+        & (met <= 400.0)
+        & (tdb <= 10.0)
+        & (v >= 0.4)
+        & (v <= 18.0)
+        & (walk_sp >= minimum_walking_speed)
+        & (walk_sp <= 1.2)
+    )
+
+
+def _format_dle(dle, round_output):
+    dle_out = np.empty(dle.shape, dtype=object)
+    unlimited = (dle > 8.0) | (dle < 0)
+    dle_out[unlimited] = "more than 8"
+
+    if round_output:
+        dle_out[~unlimited] = np.round(dle[~unlimited], 1)
+    else:
+        dle_out[~unlimited] = dle[~unlimited]
+
+    return dle_out
+
+
+def _scalar(value):
+    item = value[0]
+    if isinstance(item, np.generic):
+        return item.item()
+    return item

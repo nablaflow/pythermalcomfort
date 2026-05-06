@@ -1,121 +1,182 @@
 import numpy as np
 import pytest
 
-from pythermalcomfort.models.ireq import calc_ireq
+from pythermalcomfort.classes_return import IREQ
+from pythermalcomfort.models import ireq
+
+MET_116_W_M2 = 116.0 / 58.15
+MET_175_W_M2 = 175.0 / 58.15
+MET_400_W_M2 = 400.0 / 58.15
 
 
-def test_ireq_scalar():
-    """Test scalar inputs matching standard website validation."""
-    # These parameters match the screenshot validation you provided
-    result = calc_ireq(
-        M=175.0,
-        W=0.0,
-        ta=-15.0,
+def test_ireq_scalar_example():
+    result = ireq(
+        tdb=-15.0,
         tr=-15.0,
-        p=50.0,
-        w=1.1,
         v=2.0,
         rh=55.0,
-        clo=2.8
+        met=MET_175_W_M2,
+        clo=2.8,
+        p=50.0,
+        walk_sp=1.1,
     )
 
-    # IREQ minimal values
-    assert pytest.approx(result.IREQminimal, abs=0.1) == 1.6
-    assert pytest.approx(result.ICLminimal, abs=0.1) == 2.2
-    assert result.DLEminimal == "more than 8"
-
-    # IREQ neutral values
-    assert pytest.approx(result.IREQneutral, abs=0.1) == 1.9
-    assert pytest.approx(result.ICLneutral, abs=0.1) == 2.6
-    assert result.DLEneutral == "more than 8"
+    assert isinstance(result, IREQ)
+    assert result.ireq_min == 1.6
+    assert result.ireq_neutral == 1.9
+    assert result.icl_min == 2.2
+    assert result.icl_neutral == 2.6
+    assert result.dle_min == "more than 8"
+    assert result.dle_neutral == "more than 8"
 
 
-def test_ireq_array():
-    """Test standard array calculations for IREQ."""
-    params_array = {
-        "M": [175.0, 116.0],
-        "W": [0.0, 0.0],
-        "ta": [-15.0, -10.0],
-        "tr": [-15.0, -10.0],
-        "p": [50.0, 8.0],
-        "w": [1.1, 0.3],
-        "v": [2.0, 0.5],
-        "rh": [55.0, 50.0],
-        "clo": [2.8, 1.5],
+def test_ireq_vectorized_inputs():
+    result = ireq(
+        tdb=[-15.0, -10.0],
+        tr=[-15.0, -10.0],
+        v=[2.0, 1.0],
+        rh=[55.0, 50.0],
+        met=[MET_175_W_M2, MET_116_W_M2],
+        clo=[2.8, 1.5],
+        p=[50.0, 8.0],
+        walk_sp=[1.1, 0.31],
+    )
+
+    assert np.allclose(result.ireq_min[0], 1.6)
+    assert np.allclose(result.ireq_neutral[0], 1.9)
+    assert np.allclose(result.icl_min[0], 2.2)
+    assert np.allclose(result.icl_neutral[0], 2.6)
+    assert np.isfinite(result.ireq_min[1])
+    assert np.isfinite(result.ireq_neutral[1])
+    assert result.dle_min[0] == "more than 8"
+    assert result.dle_neutral[0] == "more than 8"
+
+
+def test_ireq_limit_inputs_returns_nan_outside_iso_range():
+    params = {
+        "tdb": -15.0,
+        "tr": -15.0,
+        "v": 0.2,
+        "rh": 55.0,
+        "met": MET_175_W_M2,
+        "clo": 2.8,
+        "p": 50.0,
+        "walk_sp": 1.1,
     }
 
-    result = calc_ireq(**params_array)
-    
-    # Assert return types and shapes
-    assert isinstance(result.IREQminimal, (list, np.ndarray))
-    assert len(result.IREQminimal) == 2
-    assert isinstance(result.DLEminimal, (list, np.ndarray))
-    assert len(result.DLEminimal) == 2
-    
-    # Assert values for the first index are identical to scalar test
-    assert pytest.approx(result.IREQminimal[0], abs=0.1) == 1.6
-    assert result.DLEminimal[0] == "more than 8"
+    result_limited = ireq(**params)
+    assert np.isnan(result_limited.ireq_min)
+    assert np.isnan(result_limited.ireq_neutral)
+    assert np.isnan(result_limited.icl_min)
+    assert np.isnan(result_limited.icl_neutral)
+    assert np.isnan(result_limited.dle_min)
+    assert np.isnan(result_limited.dle_neutral)
+
+    result_unlimited = ireq(**params, limit_inputs=False)
+    assert np.isfinite(result_unlimited.ireq_min)
+    assert np.isfinite(result_unlimited.ireq_neutral)
+    assert np.isfinite(result_unlimited.icl_min)
+    assert np.isfinite(result_unlimited.icl_neutral)
 
 
-def test_ireq_boundaries():
-    """Test auto-bounding limits for IREQ inputs according to ISO 11079."""
-    # Sending out-of-bounds parameters like M=10 or ta=50 to test if __post_init__ clamps them
-    result_out_of_bounds = calc_ireq(
-        M=10.0,     # Should clamp to 58.0
-        W=0.0,
-        ta=50.0,    # Should clamp to 10.0
-        tr=10.0,
-        p=50.0,
-        w=0.0,      # Should clamp to calculated min
-        v=0.1,      # Should clamp to 0.4
-        rh=50.0,
-        clo=1.5
-    )
-    
-    # Sending the explicitly clamped equivalent parameters to compare
-    result_clamped = calc_ireq(
-        M=58.0, 
-        W=0.0,
-        ta=10.0,
-        tr=10.0,
-        p=50.0,
-        w=0.0,      # min logic is based on (58-58) = 0.0
-        v=0.4,
-        rh=50.0,
-        clo=1.5
-    )
-    
-    assert pytest.approx(result_out_of_bounds.IREQminimal, abs=0.01) == result_clamped.IREQminimal
-def test_ireq_invalid_inputs():
-    """Test ValueError raised for invalid domains out of bounds."""
-    with pytest.raises(ValueError, match="Air permeability"):
-        calc_ireq(M=175.0, W=0.0, ta=-15.0, tr=-15.0, p=-10.0, w=1.1, v=2.0, rh=55.0, clo=2.8)
-        
-    with pytest.raises(ValueError, match="Relative humidity"):
-        calc_ireq(M=175.0, W=0.0, ta=-15.0, tr=-15.0, p=50.0, w=1.1, v=2.0, rh=105.0, clo=2.8)
-
-def test_ireq_mixed_types_broadcasting():
-    """Test mixing scalar and list bounds broadcasting properly."""
-    # M is Array, ta is scalar
-    result = calc_ireq(
-        M=[175.0, 116.0],
-        W=0.0,
-        ta=-15.0,
+def test_ireq_accepts_upper_met_boundary_with_max_walk_speed():
+    result = ireq(
+        tdb=-15.0,
         tr=-15.0,
-        p=50.0,
-        w=1.1,
         v=2.0,
         rh=55.0,
-        clo=2.8
+        met=MET_400_W_M2,
+        clo=2.8,
+        p=50.0,
+        walk_sp=1.2,
     )
-    assert len(result.IREQminimal) == 2
-    # Ensure it's correctly calculated
-    assert pytest.approx(result.IREQminimal[0], abs=0.1) == 1.6
 
-def test_ireq_re_export():
-    """Test that calc_ireq is available via the public API export."""
-    # This simulates importing from pythermalcomfort.models
-    # For now in this isolated snippet, we just assert the function itself is accessible.
-    from pythermalcomfort.models import calc_ireq as public_calc_ireq
-    assert callable(public_calc_ireq)
+    assert result.ireq_min == 0.3
+    assert result.ireq_neutral == 0.6
+    assert result.icl_min == 0.4
+    assert result.icl_neutral == 0.8
 
+
+def test_ireq_uses_wme_met_units_and_numeric_dle():
+    result = ireq(
+        tdb=-15.0,
+        tr=-15.0,
+        v=2.0,
+        rh=55.0,
+        met=MET_175_W_M2,
+        clo=2.8,
+        p=50.0,
+        walk_sp=1.1,
+        wme=1.0,
+    )
+
+    assert result.ireq_min == 2.7
+    assert result.ireq_neutral == 3.2
+    assert result.icl_min == 3.8
+    assert result.icl_neutral == 4.5
+    assert result.dle_min == 1.3
+    assert result.dle_neutral == 0.8
+
+
+def test_ireq_non_physical_outputs_masked_before_rounding():
+    result = ireq(
+        tdb=10.0,
+        tr=10.0,
+        v=0.4,
+        rh=0.0,
+        met=250.0 / 58.15,
+        clo=0.0,
+        p=1.0,
+        walk_sp=0.9984,
+    )
+
+    assert np.isnan(result.ireq_min)
+    assert np.isnan(result.icl_min)
+    assert np.isnan(result.dle_min)
+
+
+def test_ireq_invalid_physical_inputs_raise():
+    params = {
+        "tdb": -15.0,
+        "tr": -15.0,
+        "v": 2.0,
+        "rh": 55.0,
+        "met": MET_175_W_M2,
+        "clo": 2.8,
+        "p": 50.0,
+        "walk_sp": 1.1,
+    }
+
+    with pytest.raises(ValueError, match="Air permeability"):
+        ireq(**{**params, "p": -10.0})
+
+    with pytest.raises(ValueError, match="Relative humidity"):
+        ireq(**{**params, "rh": 105.0})
+
+    with pytest.raises(ValueError, match="Clothing insulation"):
+        ireq(**{**params, "clo": -1.0})
+
+    with pytest.raises(ValueError, match="Walking speed"):
+        ireq(**{**params, "walk_sp": -0.1})
+
+
+def test_ireq_broadcasts_mixed_scalar_and_array_inputs():
+    result = ireq(
+        tdb=[-15.0, -10.0],
+        tr=-15.0,
+        v=2.0,
+        rh=55.0,
+        met=MET_175_W_M2,
+        clo=2.8,
+        p=50.0,
+        walk_sp=1.1,
+    )
+
+    assert result.ireq_min.shape == (2,)
+    assert result.ireq_neutral.shape == (2,)
+
+
+def test_ireq_public_api_export():
+    from pythermalcomfort.models import ireq as public_ireq
+
+    assert public_ireq is ireq

@@ -1326,45 +1326,86 @@ class SportsHeatStressInputs(BaseInputs):
         if np.any(vr < 0):
             raise ValueError("Relative air speed (vr) must be non-negative.")
 
+
 @dataclass
-class IREQInputs:
-    M: np.ndarray
-    W: np.ndarray
-    ta: np.ndarray
-    tr: np.ndarray
-    p: np.ndarray
-    w: np.ndarray
-    v: np.ndarray
-    rh: np.ndarray
-    clo: np.ndarray
+class IREQInputs(BaseInputs):
+    p: float | int | np.ndarray | list = field(
+        default=None, metadata={"types": (float, int, np.ndarray, list)}
+    )
+    walk_sp: float | int | np.ndarray | list = field(
+        default=None, metadata={"types": (float, int, np.ndarray, list)}
+    )
 
-    def __post_init__(self):
-        # Convert all inputs to numpy arrays of floats
-        self.M = np.atleast_1d(self.M).astype(float)
-        self.W = np.atleast_1d(self.W).astype(float)
-        self.ta = np.atleast_1d(self.ta).astype(float)
-        self.tr = np.atleast_1d(self.tr).astype(float)
-        self.p = np.atleast_1d(self.p).astype(float)
-        self.w = np.atleast_1d(self.w).astype(float)
-        self.v = np.atleast_1d(self.v).astype(float)
-        self.rh = np.atleast_1d(self.rh).astype(float)
-        self.clo = np.atleast_1d(self.clo).astype(float)
-
-        # Broadcast all to same shape to allow mixed scalars/arrays
-        self.M, self.W, self.ta, self.tr, self.p, self.w, self.v, self.rh, self.clo = np.broadcast_arrays(
-            self.M, self.W, self.ta, self.tr, self.p, self.w, self.v, self.rh, self.clo
+    def __init__(
+        self,
+        tdb,
+        tr,
+        v,
+        rh,
+        met,
+        clo,
+        p,
+        walk_sp,
+        wme=0,
+        limit_inputs=True,
+        round_output=True,
+    ):
+        self.p = p
+        self.walk_sp = walk_sp
+        super().__init__(
+            tdb=tdb,
+            tr=tr,
+            v=v,
+            rh=rh,
+            met=met,
+            clo=clo,
+            wme=wme,
+            limit_inputs=limit_inputs,
+            round_output=round_output,
         )
 
-        # Apply ISO 11079 standard boundaries and limits
-        self.M = np.clip(self.M, 58.0, 400.0)
-        self.ta = np.minimum(self.ta, 10.0)
+    def __post_init__(self):
+        super().__post_init__()
 
-        w_min_calculated = 0.0052 * (self.M - 58.0)
-        self.w = np.clip(self.w, w_min_calculated, 1.2)
-        self.v = np.clip(self.v, 0.4, 18.0)
-        
+        values = {
+            "tdb": self.tdb,
+            "tr": self.tr,
+            "v": self.v,
+            "rh": self.rh,
+            "met": self.met,
+            "clo": self.clo,
+            "p": self.p,
+            "walk_sp": self.walk_sp,
+            "wme": self.wme,
+        }
+        arrays = {
+            name: np.atleast_1d(np.asarray(value, dtype=float))
+            for name, value in values.items()
+        }
+
+        try:
+            broadcasted = np.broadcast_arrays(*arrays.values())
+        except ValueError as err:
+            raise ValueError(
+                "IREQ inputs are not broadcastable to a common shape."
+            ) from err
+
+        for name, value in zip(arrays.keys(), broadcasted, strict=True):
+            if np.any(~np.isfinite(value)):
+                msg = f"{name} must contain finite values."
+                raise ValueError(msg)
+            setattr(self, name, value.astype(float))
+
+        if np.any(self.met <= 0):
+            raise ValueError("Metabolic rate (met) must be greater than 0.")
+        if np.any(self.wme < 0):
+            raise ValueError("External work (wme) must be non-negative.")
         if np.any(self.p <= 0):
             raise ValueError("Air permeability (p) must be greater than 0.")
+        if np.any(self.v < 0):
+            raise ValueError("Relative air speed (v) must be non-negative.")
+        if np.any(self.walk_sp < 0):
+            raise ValueError("Walking speed (walk_sp) must be non-negative.")
         if np.any(self.rh < 0) or np.any(self.rh > 100):
             raise ValueError("Relative humidity (rh) must be between 0 and 100.")
         if np.any(self.clo < 0):
