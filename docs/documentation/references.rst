@@ -1,6 +1,7 @@
 References
 ==========
 
+.. [11079ISO2007] ISO, 2007. ISO 11079 - Ergonomics of the thermal environment - Determination and interpretation of cold stress when using required clothing insulation (IREQ) and local cooling effects.
 .. [55ASHRAE2023] ANSI, & ASHRAE. (2023). Thermal Environmental Conditions for Human Occupancy. Atlanta.
 .. [7730ISO2005] ISO. (2005). ISO 7730 - Ergonomics of the thermal environment — Analytical determination and interpretation of thermal comfort using calculation of the PMV and PPD indices and local thermal comfort criteria.
 .. [16798EN2019] EN, & BSI. (2019). Energy performance of buildings - Ventilation for buildings. BSI Standards Limited 2019.

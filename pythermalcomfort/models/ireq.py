@@ -24,7 +24,8 @@ def ireq(
 
     The model estimates the clothing insulation required to maintain thermal
     equilibrium in cold environments and the Duration Limited Exposure (DLE)
-    when available clothing insulation is insufficient.
+    when available clothing insulation is insufficient, in accordance with
+    ISO 11079 [11079ISO2007]_.
 
     Parameters
     ----------
@@ -50,6 +51,14 @@ def ireq(
         When True, results outside the ISO 11079 applicability limits are set
         to nan. Non-physical negative clothing insulation outputs are also set
         to nan. Defaults to True.
+
+        .. note::
+            The ISO 11079 applicability limits used by this function are
+            58 <= met [W/m2] <= 400 after converting the input metabolic rate
+            from met to W/m2, tdb <= 10 [deg C], 0.4 <= v [m/s] <= 18, and
+            minimum_walking_speed <= walk_sp [m/s] <= 1.2, where
+            minimum_walking_speed = min(0.0052 * (met [W/m2] - 58), 1.2).
+
     round_output : bool, optional
         When True, rounds numeric output values to one decimal place. Defaults
         to True.
@@ -58,11 +67,42 @@ def ireq(
     -------
     IREQ
         A dataclass containing ``ireq_min``, ``ireq_neutral``, ``icl_min``,
-        ``icl_neutral``, ``dle_min``, and ``dle_neutral``.
+        ``icl_neutral``, ``dle_min``, and ``dle_neutral``. See
+        :py:class:`~pythermalcomfort.classes_return.IREQ` for more details.
+
+    Raises
+    ------
+    TypeError
+        If an input has an unsupported type, or if ``limit_inputs`` or
+        ``round_output`` are not booleans.
+    ValueError
+        If inputs are not broadcastable to a common shape, contain non-finite
+        values, or fail physical validation. The physical validation rejects
+        ``met <= 0``, ``wme < 0``, ``p <= 0``, ``v < 0``, ``walk_sp < 0``,
+        relative humidity outside 0 to 100 %, and ``clo < 0``.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        from pythermalcomfort.models import ireq
+
+        result = ireq(
+            tdb=-15.0,
+            tr=-15.0,
+            v=2.0,
+            rh=55.0,
+            met=175.0 / 58.15,
+            clo=2.8,
+            p=50.0,
+            walk_sp=1.1,
+        )
+        print(result.ireq_min)  # 1.6
+        print(result.dle_min)  # more than 8
 
     References
     ----------
-    ISO 11079:2007 Standard
+    ISO 11079:2007 [11079ISO2007]_.
     """
 
     is_scalar = all(
@@ -114,16 +154,12 @@ def ireq(
     ar_adu = 0.77
     results = {}
 
-    for calculation in (1, 2):
-        if calculation == 1:
-            skin_temperature = 33.34 - 0.0354 * met
-            wetness = np.full_like(met, 0.06)
-            suffix = "min"
-        else:
-            skin_temperature = 35.7 - 0.0285 * met
-            wetness = 0.001 * met
-            suffix = "neutral"
+    calculation_criteria = (
+        ("min", 33.34 - 0.0354 * met, np.full_like(met, 0.06)),
+        ("neutral", 35.7 - 0.0285 * met, 0.001 * met),
+    )
 
+    for suffix, skin_temperature, wetness in calculation_criteria:
         skin_saturated_pressure = 0.1333 * np.exp(
             18.6686 - 4030.183 / (skin_temperature + 235.0)
         )

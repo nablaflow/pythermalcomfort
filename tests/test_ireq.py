@@ -30,6 +30,61 @@ def test_ireq_scalar_example():
     assert result.dle_neutral == "more than 8"
 
 
+@pytest.mark.parametrize(
+    (
+        "tdb",
+        "tr",
+        "v",
+        "met_w_m2",
+        "clo",
+        "expected_ireq_neutral",
+        "expected_icl_neutral",
+        "expected_dle_neutral",
+    ),
+    [
+        (0, 0, 2, 90, 2.5, 2.6, 3.1, 2.3),
+        (0, 0, 2, 145, 2.5, 1.5, 1.8, "more than 8"),
+        (-10, -10, 2, 90, 2.5, 3.5, 4.4, 0.7),
+        (-10, 0, 2, 145, 2.4, 1.9, 2.4, "more than 8"),
+        (-20, -20, 2, 115, 4.2, 3.4, 4.2, "more than 8"),
+        (-20, -20, 7, 115, 4.2, 3.5, 5.9, 1.1),
+        (-30, -30, 2, 115, 4.2, 4.0, 5.0, 2.2),
+        (-30, -30, 5, 175, 4.2, 2.6, 4.0, "more than 8"),
+    ],
+)
+def test_ireq_iso_11079_table_f1(
+    tdb,
+    tr,
+    v,
+    met_w_m2,
+    clo,
+    expected_ireq_neutral,
+    expected_icl_neutral,
+    expected_dle_neutral,
+):
+    walk_sp = max(0.5, min(0.0052 * (met_w_m2 - 58.0), 1.2))
+
+    result = ireq(
+        tdb=tdb,
+        tr=tr,
+        v=v,
+        rh=85,
+        met=met_w_m2 / 58.15,
+        clo=clo,
+        p=8,
+        walk_sp=walk_sp,
+        wme=0,
+    )
+
+    assert result.ireq_neutral == pytest.approx(expected_ireq_neutral, abs=0.11)
+    assert result.icl_neutral == pytest.approx(expected_icl_neutral, abs=0.11)
+
+    if expected_dle_neutral == "more than 8":
+        assert result.dle_neutral == expected_dle_neutral
+    else:
+        assert result.dle_neutral == pytest.approx(expected_dle_neutral, abs=0.21)
+
+
 def test_ireq_vectorized_inputs():
     result = ireq(
         tdb=[-15.0, -10.0],
