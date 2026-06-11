@@ -4,7 +4,8 @@ import numpy as np
 
 from pythermalcomfort.classes_input import HIInputs, NumericInput
 from pythermalcomfort.classes_return import HI
-from pythermalcomfort.shared_functions import mapping, valid_range
+from pythermalcomfort.shared_functions import mapping
+from pythermalcomfort.utilities import psy_ta_rh
 
 
 def heat_index_schoen(
@@ -15,7 +16,7 @@ def heat_index_schoen(
     """Calculate the Tempearture Humidity Index (THI) also known as Heat Index Schoen in accordance with the Schoen (2005) model.
         [Schoen2005]_.
 
-    The temperature–humidity index (THI) is a simplified scale of apparent temperature, considering only dry-bulb temperature and humidity. It is another formulation of the heat index.    
+    The temperature-humidity index (THI) is a simplified scale of apparent temperature, considering only dry-bulb temperature and humidity. It is another formulation of the heat index.    
 
     Parameters
     ----------
@@ -39,33 +40,26 @@ def heat_index_schoen(
         from pythermalcomfort.models import heat_index_schoen
 
         result = heat_index_schoen(tdb=29, rh=50)
-        print(result.hi)
+        print(result.hi) # todo: add expected output
     """
     # Validate inputs using the HeatIndexInputs class
     HIInputs(
         tdb=tdb,
         rh=rh,
         round_output=round_output,
-        limit_inputs=limit_inputs,
+        limit_inputs=True,
     )
 
     tdb = np.asarray(tdb)
     rh = np.asarray(rh)
 
-    hi = -8.784695 + 1.61139411 * tdb + 2.338549 * rh - 0.14611605 * tdb * rh
-    hi += -1.2308094 * 10**-2 * tdb**2 - 1.6424828 * 10**-2 * rh**2
-    hi += 2.211732 * 10**-3 * tdb**2 * rh + 7.2546 * 10**-4 * tdb * rh**2
-    hi += -3.582 * 10**-6 * tdb**2 * rh**2
+    # Calculate dew point temperature
+    t_dew = psy_ta_rh(tdb, rh, p_atm=101325).dew_point_tmp
 
-    # heat index should only be calculated for temperatures above 27 °C
-    if limit_inputs:
-        tdb_valid = valid_range(tdb, (27.0, np.inf))
-        hi_valid = np.where(~np.isnan(tdb_valid), hi, np.nan)
-    else:
-        hi_valid = hi
+    hi = tdb - 1.0799 * np.exp(0.03755 * tdb) * (1 - np.exp(0.0801 * (t_dew - 14)))
 
     heat_index_categories = {
-        27.0: "no risk",
+        -1000: "no risk",
         32.0: "caution",
         41.0: "extreme caution",
         54.0: "danger",
@@ -73,6 +67,6 @@ def heat_index_schoen(
     }
 
     if round_output:
-        hi_valid = np.around(hi_valid, 1)
+        hi = np.around(hi, 1)
 
-    return HI(hi=hi_valid, stress_category=mapping(hi_valid, heat_index_categories))
+    return HI(hi=hi, stress_category=mapping(hi, heat_index_categories))
