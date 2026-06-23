@@ -39,7 +39,8 @@ def heat_index_schoen(
         from pythermalcomfort.models import heat_index_schoen
 
         result = heat_index_schoen(tdb=29, rh=50)
-        print(result.hi)  # todo: add expected output
+        print(result.hi)  # 30
+        print(result.stress_category)  # caution
     """
     # Validate inputs using the HeatIndexInputs class
     HIInputs(
