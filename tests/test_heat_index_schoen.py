@@ -63,10 +63,10 @@ def test_list_input() -> None:
 @pytest.mark.parametrize(
     ("tdb", "rh", "expected_error"),
     [
-        ("29", 50, TypeError),
-        (29, "50", TypeError),
-        (29, -1, ValueError),
-        (29, 101, ValueError),
+        pytest.param("29", 50, TypeError, id="tdb-string"),
+        pytest.param(29, "50", TypeError, id="rh-string"),
+        pytest.param(29, -1, ValueError, id="rh-negative"),
+        pytest.param(29, 101, ValueError, id="rh-over-100"),
     ],
 )
 def test_invalid_inputs_raise_specific(tdb, rh, expected_error) -> None:
