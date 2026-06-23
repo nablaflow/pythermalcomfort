@@ -13,7 +13,7 @@ def heat_index_schoen(
     rh: NumericInput,
     round_output: bool = True,
 ) -> HI:
-    """Calculate the Tempearture Humidity Index (THI) also known as Heat Index Schoen in accordance with the Schoen (2005) model [Schoen2005]_.
+    """Calculate the Temperature Humidity Index (THI) also known as Heat Index Schoen in accordance with the Schoen (2005) model [Schoen2005]_.
 
     The temperature-humidity index (THI) is a simplified scale of apparent temperature, considering only dry-bulb temperature and humidity. It is another formulation of the heat index.
 
