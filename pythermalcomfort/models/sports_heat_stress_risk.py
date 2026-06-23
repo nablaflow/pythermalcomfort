@@ -244,7 +244,7 @@ def _calc_risk_single_value(
     max_t_low = 34.5  # maximum tdb for low risk
     max_t_medium = 39  # maximum tdb for medium risk
     max_t_high = 43.5  # maximum tdb for high risk
-    # risk 4.9 is reached 5°C above the humidity-dependent extreme threshold
+    # risk 4.9 is reached exactly 5°C above the humidity-dependent extreme threshold
     t_upper_extreme_delta = 5.0
     min_t_low = 21  # minimum tdb for low risk
     min_t_medium = 23  # minimum tdb for medium risk
@@ -362,13 +362,20 @@ def _calc_risk_single_value(
     elif t_high <= tdb < extreme_entry_t:
         risk_level_interpolated = 3.0 + (tdb - t_high) / (extreme_entry_t - t_high)
     elif tdb >= extreme_entry_t:
-        risk_level_interpolated = 4.0 + (tdb - extreme_entry_t) / t_upper_extreme_delta
+        # Scale to [4.0, 4.9] so risk reaches 4.9 exactly at extreme_entry_t + t_upper_extreme_delta.
+        # Without the 0.9 factor the formula would hit 4.9 already at +4.5°C (90% of the range).
+        risk_level_interpolated = (
+            4.0 + (tdb - extreme_entry_t) / t_upper_extreme_delta * 0.9
+        )
 
     if np.isnan(risk_level_interpolated):
         raise ValueError("Risk level could not be determined due to NaN thresholds.")
 
     # Truncate to one decimal place toward negative infinity.
-    risk_level_floor = min(np.floor(risk_level_interpolated * 10.0) / 10.0, 4.9)
+    # The 1e-9 epsilon guards against float representation of 4.9 (e.g. 4.8999…) flooring to 4.8.
+    risk_level_floor = min(
+        np.floor((risk_level_interpolated + 1e-9) * 10.0) / 10.0, 4.9
+    )
 
     # Generate recommendation based on the FLOORED risk level for consistency
     recommendation = _get_recommendation(risk_level_floor)
