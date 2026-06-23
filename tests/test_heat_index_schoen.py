@@ -12,9 +12,7 @@ def _expected_heat_index_schoen(tdb, rh):
     tdb = np.asarray(tdb)
     rh = np.asarray(rh)
     t_dew = psy_ta_rh(tdb, rh, p_atm=101325).dew_point_tmp
-    return tdb - 1.0799 * np.exp(0.03755 * tdb) * (
-        1 - np.exp(0.0801 * (t_dew - 14))
-    )
+    return tdb - 1.0799 * np.exp(0.03755 * tdb) * (1 - np.exp(0.0801 * (t_dew - 14)))
 
 
 def _expected_stress_category(hi):

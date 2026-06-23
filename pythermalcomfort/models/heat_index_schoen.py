@@ -15,7 +15,7 @@ def heat_index_schoen(
 ) -> HI:
     """Calculate the Tempearture Humidity Index (THI) also known as Heat Index Schoen in accordance with the Schoen (2005) model [Schoen2005]_.
 
-    The temperature-humidity index (THI) is a simplified scale of apparent temperature, considering only dry-bulb temperature and humidity. It is another formulation of the heat index.    
+    The temperature-humidity index (THI) is a simplified scale of apparent temperature, considering only dry-bulb temperature and humidity. It is another formulation of the heat index.
 
     Parameters
     ----------
@@ -39,7 +39,7 @@ def heat_index_schoen(
         from pythermalcomfort.models import heat_index_schoen
 
         result = heat_index_schoen(tdb=29, rh=50)
-        print(result.hi) # todo: add expected output
+        print(result.hi)  # todo: add expected output
     """
     # Validate inputs using the HeatIndexInputs class
     HIInputs(
