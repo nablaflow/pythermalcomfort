@@ -157,6 +157,15 @@ Heat Index (HI) Rothfusz (1990)
     :noindex:
     :members:
 
+Heat Index (HI) Schoen (2005)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autofunction:: pythermalcomfort.models.heat_index_schoen.heat_index_schoen
+
+.. autoclass:: pythermalcomfort.classes_return.HI
+    :noindex:
+    :members:
+
 Humidex
 -------
 
