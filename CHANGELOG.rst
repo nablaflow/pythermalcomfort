@@ -1,9 +1,14 @@
 Changelog
 =========
 
-Unreleased
-----------
+4.0.3 (2026-07-20)
+------------------
 
+* Added a ``Sports.CROQUET`` preset to ``sports_heat_stress_risk``
+  (``clo=0.7, met=4.5, vr=0.5, duration=90``).
+* Fixed the extreme-risk interpolation segment so it reaches a risk level of
+  4.9 exactly 5 °C above the extreme threshold, instead of reaching it early
+  at +4.5 °C and leaving the last 0.5 °C of the range dead.
 * Fixed an inconsistency in ``sports_heat_stress_risk``'s extreme-risk
   interpolation: the upper anchor temperature used internally to scale the
   risk level was the raw, unrounded solver output, while the ``t_extreme``
