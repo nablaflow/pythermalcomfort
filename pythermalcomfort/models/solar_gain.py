@@ -3,10 +3,66 @@ from __future__ import annotations
 import math
 
 import numpy as np
+from numba import njit, prange
 
 from pythermalcomfort.classes_input import NumericInput, SolarGainInputs
 from pythermalcomfort.classes_return import SolarGain
 from pythermalcomfort.utilities import Postures, transpose_sharp_altitude
+
+# integer codes for posture, since numba nopython mode can't dispatch on
+# Python string/enum comparisons the way the rest of this module's helpers do
+_POSTURE_STANDING = 0
+_POSTURE_SITTING = 1
+_POSTURE_SUPINE = 2
+
+_POSTURE_CODES = {
+    Postures.standing.value: _POSTURE_STANDING,
+    Postures.sitting.value: _POSTURE_SITTING,
+    Postures.supine.value: _POSTURE_SUPINE,
+}
+
+_ALT_RANGE = np.array([0.0, 15.0, 30.0, 45.0, 60.0, 75.0, 90.0])
+_AZ_RANGE = np.array(
+    [0.0, 15.0, 30.0, 45.0, 60.0, 75.0, 90.0, 105.0, 120.0, 135.0, 150.0, 165.0, 180.0]
+)
+
+# fp is the projected area factor, standing/supine
+_FP_TABLE_STANDING = np.array(
+    [
+        [0.35, 0.35, 0.314, 0.258, 0.206, 0.144, 0.082],
+        [0.342, 0.342, 0.31, 0.252, 0.2, 0.14, 0.082],
+        [0.33, 0.33, 0.3, 0.244, 0.19, 0.132, 0.082],
+        [0.31, 0.31, 0.275, 0.228, 0.175, 0.124, 0.082],
+        [0.283, 0.283, 0.251, 0.208, 0.16, 0.114, 0.082],
+        [0.252, 0.252, 0.228, 0.188, 0.15, 0.108, 0.082],
+        [0.23, 0.23, 0.214, 0.18, 0.148, 0.108, 0.082],
+        [0.242, 0.242, 0.222, 0.18, 0.153, 0.112, 0.082],
+        [0.274, 0.274, 0.245, 0.203, 0.165, 0.116, 0.082],
+        [0.304, 0.304, 0.27, 0.22, 0.174, 0.121, 0.082],
+        [0.328, 0.328, 0.29, 0.234, 0.183, 0.125, 0.082],
+        [0.344, 0.344, 0.304, 0.244, 0.19, 0.128, 0.082],
+        [0.347, 0.347, 0.308, 0.246, 0.191, 0.128, 0.082],
+    ]
+)
+
+# fp table, sitting
+_FP_TABLE_SITTING = np.array(
+    [
+        [0.29, 0.324, 0.305, 0.303, 0.262, 0.224, 0.177],
+        [0.292, 0.328, 0.294, 0.288, 0.268, 0.227, 0.177],
+        [0.288, 0.332, 0.298, 0.29, 0.264, 0.222, 0.177],
+        [0.274, 0.326, 0.294, 0.289, 0.252, 0.214, 0.177],
+        [0.254, 0.308, 0.28, 0.276, 0.241, 0.202, 0.177],
+        [0.23, 0.282, 0.262, 0.26, 0.233, 0.193, 0.177],
+        [0.216, 0.26, 0.248, 0.244, 0.22, 0.186, 0.177],
+        [0.234, 0.258, 0.236, 0.227, 0.208, 0.18, 0.177],
+        [0.262, 0.26, 0.224, 0.208, 0.196, 0.176, 0.177],
+        [0.28, 0.26, 0.21, 0.192, 0.184, 0.17, 0.177],
+        [0.298, 0.256, 0.194, 0.174, 0.168, 0.168, 0.177],
+        [0.306, 0.25, 0.18, 0.156, 0.156, 0.166, 0.177],
+        [0.3, 0.24, 0.168, 0.152, 0.152, 0.164, 0.177],
+    ]
+)
 
 
 def solar_gain(
@@ -142,27 +198,49 @@ def solar_gain(
     floor_reflectance = np.asarray(floor_reflectance)
 
     posture = posture.lower()
-    if posture not in [
-        Postures.standing.value,
-        Postures.supine.value,
-        Postures.sitting.value,
-    ]:
+    if posture not in _POSTURE_CODES:
         error_msg_posture = (
             "Posture has to be either 'standing', 'supine' or 'sitting'."
         )
         raise ValueError(error_msg_posture)
+    posture_code = np.asarray(_POSTURE_CODES[posture])
 
-    erf, d_mrt = _solar_gain_vectorised(
-        sol_altitude=sol_altitude,
-        sharp=sharp,
-        sol_radiation_dir=sol_radiation_dir,
-        sol_transmittance=sol_transmittance,
-        f_svv=f_svv,
-        f_bes=f_bes,
-        asw=asw,
-        floor_reflectance=floor_reflectance,
-        posture=posture,
+    (
+        sol_altitude_b,
+        sharp_b,
+        sol_radiation_dir_b,
+        sol_transmittance_b,
+        f_svv_b,
+        f_bes_b,
+        asw_b,
+        floor_reflectance_b,
+        posture_code_b,
+    ) = np.broadcast_arrays(
+        sol_altitude,
+        sharp,
+        sol_radiation_dir,
+        sol_transmittance,
+        f_svv,
+        f_bes,
+        asw,
+        floor_reflectance,
+        posture_code,
     )
+    output_shape = sol_altitude_b.shape
+
+    erf, d_mrt = _solar_gain_array(
+        sol_altitude=np.ravel(sol_altitude_b).astype(np.float64),
+        sharp=np.ravel(sharp_b).astype(np.float64),
+        sol_radiation_dir=np.ravel(sol_radiation_dir_b).astype(np.float64),
+        sol_transmittance=np.ravel(sol_transmittance_b).astype(np.float64),
+        f_svv=np.ravel(f_svv_b).astype(np.float64),
+        f_bes=np.ravel(f_bes_b).astype(np.float64),
+        asw=np.ravel(asw_b).astype(np.float64),
+        floor_reflectance=np.ravel(floor_reflectance_b).astype(np.float64),
+        posture_code=np.ravel(posture_code_b).astype(np.int64),
+    )
+    erf = erf.reshape(output_shape)
+    d_mrt = d_mrt.reshape(output_shape)
 
     if round_output:
         erf = np.round(erf, 1)
@@ -171,8 +249,17 @@ def solar_gain(
     return SolarGain(erf=erf, delta_mrt=d_mrt)
 
 
-@np.vectorize
-def _solar_gain_vectorised(
+@njit(cache=True)
+def _find_span(arr, x):
+    n = arr.shape[0]
+    for i in range(n):
+        if arr[i + 1] >= x >= arr[i]:
+            return i
+    return -1
+
+
+@njit(cache=True)
+def _solar_gain_scalar(
     sol_altitude,
     sharp,
     sol_radiation_dir,
@@ -180,67 +267,31 @@ def _solar_gain_vectorised(
     f_svv,
     f_bes,
     asw,
-    posture,
     floor_reflectance,
+    posture_code,
 ):
-    def find_span(arr, x):
-        for i in range(len(arr)):
-            if arr[i + 1] >= x >= arr[i]:
-                return i
-        return -1
-
     deg_to_rad = 0.0174532925
     hr = 6
     i_diff = 0.2 * sol_radiation_dir
 
-    # fp is the projected area factor
-    fp_table = [
-        [0.35, 0.35, 0.314, 0.258, 0.206, 0.144, 0.082],
-        [0.342, 0.342, 0.31, 0.252, 0.2, 0.14, 0.082],
-        [0.33, 0.33, 0.3, 0.244, 0.19, 0.132, 0.082],
-        [0.31, 0.31, 0.275, 0.228, 0.175, 0.124, 0.082],
-        [0.283, 0.283, 0.251, 0.208, 0.16, 0.114, 0.082],
-        [0.252, 0.252, 0.228, 0.188, 0.15, 0.108, 0.082],
-        [0.23, 0.23, 0.214, 0.18, 0.148, 0.108, 0.082],
-        [0.242, 0.242, 0.222, 0.18, 0.153, 0.112, 0.082],
-        [0.274, 0.274, 0.245, 0.203, 0.165, 0.116, 0.082],
-        [0.304, 0.304, 0.27, 0.22, 0.174, 0.121, 0.082],
-        [0.328, 0.328, 0.29, 0.234, 0.183, 0.125, 0.082],
-        [0.344, 0.344, 0.304, 0.244, 0.19, 0.128, 0.082],
-        [0.347, 0.347, 0.308, 0.246, 0.191, 0.128, 0.082],
-    ]
-    if posture == Postures.sitting.value:
-        fp_table = [
-            [0.29, 0.324, 0.305, 0.303, 0.262, 0.224, 0.177],
-            [0.292, 0.328, 0.294, 0.288, 0.268, 0.227, 0.177],
-            [0.288, 0.332, 0.298, 0.29, 0.264, 0.222, 0.177],
-            [0.274, 0.326, 0.294, 0.289, 0.252, 0.214, 0.177],
-            [0.254, 0.308, 0.28, 0.276, 0.241, 0.202, 0.177],
-            [0.23, 0.282, 0.262, 0.26, 0.233, 0.193, 0.177],
-            [0.216, 0.26, 0.248, 0.244, 0.22, 0.186, 0.177],
-            [0.234, 0.258, 0.236, 0.227, 0.208, 0.18, 0.177],
-            [0.262, 0.26, 0.224, 0.208, 0.196, 0.176, 0.177],
-            [0.28, 0.26, 0.21, 0.192, 0.184, 0.17, 0.177],
-            [0.298, 0.256, 0.194, 0.174, 0.168, 0.168, 0.177],
-            [0.306, 0.25, 0.18, 0.156, 0.156, 0.166, 0.177],
-            [0.3, 0.24, 0.168, 0.152, 0.152, 0.164, 0.177],
-        ]
+    if posture_code == _POSTURE_SITTING:
+        fp_table = _FP_TABLE_SITTING
+    else:
+        fp_table = _FP_TABLE_STANDING
 
-    if posture == Postures.supine.value:
+    if posture_code == _POSTURE_SUPINE:
         sharp, sol_altitude = transpose_sharp_altitude(sharp, sol_altitude)
 
-    alt_range = [0, 15, 30, 45, 60, 75, 90]
-    az_range = [0, 15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180]
-    alt_i = find_span(alt_range, sol_altitude)
-    az_i = find_span(az_range, sharp)
-    fp11 = fp_table[az_i][alt_i]
-    fp12 = fp_table[az_i][alt_i + 1]
-    fp21 = fp_table[az_i + 1][alt_i]
-    fp22 = fp_table[az_i + 1][alt_i + 1]
-    az1 = az_range[az_i]
-    az2 = az_range[az_i + 1]
-    alt1 = alt_range[alt_i]
-    alt2 = alt_range[alt_i + 1]
+    alt_i = _find_span(_ALT_RANGE, sol_altitude)
+    az_i = _find_span(_AZ_RANGE, sharp)
+    fp11 = fp_table[az_i, alt_i]
+    fp12 = fp_table[az_i, alt_i + 1]
+    fp21 = fp_table[az_i + 1, alt_i]
+    fp22 = fp_table[az_i + 1, alt_i + 1]
+    az1 = _AZ_RANGE[az_i]
+    az2 = _AZ_RANGE[az_i + 1]
+    alt1 = _ALT_RANGE[alt_i]
+    alt2 = _ALT_RANGE[alt_i + 1]
     fp = fp11 * (az2 - sharp) * (alt2 - sol_altitude)
     fp += fp21 * (sharp - az1) * (alt2 - sol_altitude)
     fp += fp12 * (az2 - sharp) * (sol_altitude - alt1)
@@ -248,7 +299,7 @@ def _solar_gain_vectorised(
     fp /= (az2 - az1) * (alt2 - alt1)
 
     f_eff = 0.725  # fraction of the body surface exposed to environmental radiation
-    if posture == Postures.sitting.value:
+    if posture_code == _POSTURE_SITTING:
         f_eff = 0.696
 
     sw_abs = asw
@@ -269,4 +320,34 @@ def _solar_gain_vectorised(
     erf = e_solar * (sw_abs / lw_abs)
     d_mrt = erf / (hr * f_eff)
 
+    return erf, d_mrt
+
+
+@njit(cache=True, parallel=True)
+def _solar_gain_array(
+    sol_altitude,
+    sharp,
+    sol_radiation_dir,
+    sol_transmittance,
+    f_svv,
+    f_bes,
+    asw,
+    floor_reflectance,
+    posture_code,
+):
+    n = sol_altitude.shape[0]
+    erf = np.empty(n, dtype=np.float64)
+    d_mrt = np.empty(n, dtype=np.float64)
+    for i in prange(n):
+        erf[i], d_mrt[i] = _solar_gain_scalar(
+            sol_altitude[i],
+            sharp[i],
+            sol_radiation_dir[i],
+            sol_transmittance[i],
+            f_svv[i],
+            f_bes[i],
+            asw[i],
+            floor_reflectance[i],
+            posture_code[i],
+        )
     return erf, d_mrt

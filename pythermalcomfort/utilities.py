@@ -6,6 +6,7 @@ from enum import Enum
 from typing import NamedTuple
 
 import numpy as np
+from numba import njit
 from numpy.typing import NDArray
 
 from pythermalcomfort.classes_return import PsychrometricValues
@@ -471,6 +472,7 @@ def validate_type(value, name: str, allowed_types: tuple):
         raise TypeError(invalid_type_msg)
 
 
+@njit(cache=True)
 def transpose_sharp_altitude(sharp: float, altitude: float) -> tuple[float, float]:
     """Transpose the solar altitude and solar azimuth angles."""
     altitude_new = math.degrees(
