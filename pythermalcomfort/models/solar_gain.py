@@ -251,8 +251,18 @@ def solar_gain(
 
 @njit(cache=True)
 def _find_span(arr, x):
+    # range(n - 1), not range(n): the original pure Python loop iterated
+    # range(len(arr)) and relied on valid (in-range) inputs always matching
+    # before the last iteration read arr[i + 1] one past the end - out of
+    # range inputs would raise IndexError there. In the numba version this
+    # is called from a prange-parallelized loop (_solar_gain_array), and
+    # numba does not propagate exceptions raised inside prange loops, so an
+    # out-of-bounds read there would silently return garbage rather than a
+    # clean error. Stopping one iteration early avoids the out-of-bounds
+    # read entirely; out-of-range inputs now return -1 (same as any other
+    # unmatched span) instead of raising.
     n = arr.shape[0]
-    for i in range(n):
+    for i in range(n - 1):
         if arr[i + 1] >= x >= arr[i]:
             return i
     return -1
