@@ -1,6 +1,15 @@
 Changelog
 =========
 
+4.1.0 (2026-07-20)
+------------------
+
+* Added ``heat_index_schoen``, the Temperature-Humidity Index (THI) heat
+  index model in accordance with Schoen (2005).
+* Sped up ``heat_index_rothfusz``, ``heat_index_schoen``, and
+  ``heat_index_lu`` with numba JIT compilation. ``heat_index_lu`` (an
+  iterative root-solver) sees the largest gain, roughly 29x faster.
+
 4.0.3 (2026-07-20)
 ------------------
 
