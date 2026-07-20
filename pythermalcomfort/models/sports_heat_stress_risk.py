@@ -353,7 +353,9 @@ def _calc_risk_single_value(
     if t_medium < min_t_medium:
         t_medium = min_t_medium
 
-    extreme_entry_t = min(t_extreme, max_t_high)
+    # Round to match the t_extreme value actually returned to callers, so the
+    # interpolation is computed against the same threshold that's documented/exposed.
+    extreme_entry_t = min(round(t_extreme, 1), max_t_high)
     risk_level_interpolated = np.nan
     # calculate the risk level with one decimal place
     if min_t_low <= tdb < t_medium:

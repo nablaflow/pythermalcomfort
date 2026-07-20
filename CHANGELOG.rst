@@ -1,6 +1,16 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+* Fixed an inconsistency in ``sports_heat_stress_risk``'s extreme-risk
+  interpolation: the upper anchor temperature used internally to scale the
+  risk level was the raw, unrounded solver output, while the ``t_extreme``
+  value returned to callers is rounded to one decimal. This could produce a
+  risk level inconsistent with the documented/returned thresholds. The
+  interpolation now uses the same rounded ``t_extreme`` that is returned.
+
 4.0.2 (2026-06-23)
 ------------------
 
