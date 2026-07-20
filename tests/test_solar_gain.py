@@ -21,6 +21,37 @@ def test_solar_gain(get_test_url, retrieve_data) -> None:
         validate_result(result, outputs, tolerance)
 
 
+def test_solar_gain_regression_values() -> None:
+    """Pin erf/delta_mrt against the reference (pre-numba) implementation.
+
+    Values were captured from the implementation before its table-lookup
+    kernel was rewritten for numba (posture strings -> integer codes, table
+    lists -> np.array, plain-Python loop -> njit/prange). Confirmed to match
+    bit-for-bit across a wide random sweep (all 3 postures) plus exact grid
+    boundary points.
+    """
+    cases = [
+        (0, 120, 800, 0.5, 0.5, 0.5, "sitting", 43.2839, 10.3649),
+        (30, 60, 600, 0.6, 0.4, 0.6, "standing", 52.8099, 12.1402),
+        (45, 90, 500, 0.7, 0.3, 0.7, "supine", 49.548, 11.3904),
+        (90, 0, 1000, 1.0, 1.0, 1.0, "sitting", 326.6804, 78.2281),
+        (15, 165, 250, 0.2, 0.1, 0.9, "standing", 8.9043, 2.047),
+    ]
+    for alt, sharp, rad, trans, svv, bes, posture, exp_erf, exp_d_mrt in cases:
+        result = solar_gain(
+            sol_altitude=alt,
+            sharp=sharp,
+            sol_radiation_dir=rad,
+            sol_transmittance=trans,
+            f_svv=svv,
+            f_bes=bes,
+            posture=posture,
+            round_output=False,
+        )
+        assert np.isclose(result.erf, exp_erf, atol=1e-3)
+        assert np.isclose(result.delta_mrt, exp_d_mrt, atol=1e-3)
+
+
 def test_solar_gain_array() -> None:
     """Test that the solar gain function works with arrays."""
     np.allclose(
