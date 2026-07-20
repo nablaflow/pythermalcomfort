@@ -5,13 +5,16 @@ from tests.conftest import Urls, retrieve_reference_table, validate_result
 
 
 def test_cooling_effect_regression_values() -> None:
-    """Pin ce against the reference (pre-numba) implementation.
+    """Pin ce against the reference (pre-refactor) implementation.
 
-    Values were captured from the implementation before its inner SET
-    calculation was rewritten to call the numba-jitted Gagge kernel directly
-    (instead of going through the full set_tmp()/two_nodes_gagge() public API
-    on every root-finding iteration). Confirmed to match bit-for-bit across a
-    wide random sweep plus edge cases (vr <= 0.1, vr == 0.1 boundary).
+    The previous implementation already called the numba-jitted Gagge kernel
+    (via set_tmp()/two_nodes_gagge()) - it wasn't slow because it lacked
+    numba, but because every root-finding iteration re-ran the full public
+    set_tmp() API (input validation, dataclass construction, etc.) on top of
+    that kernel. Values were captured before the inner SET calculation was
+    rewritten to call the jitted kernel directly, skipping that overhead.
+    Confirmed to match bit-for-bit across a wide random sweep plus edge cases
+    (vr <= 0.1, vr == 0.1 boundary).
     """
     cases = [
         (25, 25, 0.05, 50, 1.2, 0.5, 0.0),  # vr <= 0.1 -> 0
