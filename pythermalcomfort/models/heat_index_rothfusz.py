@@ -4,7 +4,11 @@ import numpy as np
 
 from pythermalcomfort.classes_input import HIInputs, NumericInput
 from pythermalcomfort.classes_return import HI
-from pythermalcomfort.shared_functions import mapping, valid_range
+from pythermalcomfort.shared_functions import (
+    HEAT_INDEX_STRESS_CATEGORIES,
+    mapping,
+    valid_range,
+)
 
 
 def heat_index_rothfusz(
@@ -73,13 +77,7 @@ def heat_index_rothfusz(
     else:
         hi_valid = hi
 
-    heat_index_categories = {
-        27.0: "no risk",
-        32.0: "caution",
-        41.0: "extreme caution",
-        54.0: "danger",
-        1000.0: "extreme danger",
-    }
+    heat_index_categories = {27.0: "no risk", **HEAT_INDEX_STRESS_CATEGORIES}
 
     if round_output:
         hi_valid = np.around(hi_valid, 1)

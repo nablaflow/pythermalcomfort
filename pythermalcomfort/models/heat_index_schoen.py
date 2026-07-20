@@ -4,7 +4,7 @@ import numpy as np
 
 from pythermalcomfort.classes_input import HIInputs, NumericInput
 from pythermalcomfort.classes_return import HI
-from pythermalcomfort.shared_functions import mapping
+from pythermalcomfort.shared_functions import HEAT_INDEX_STRESS_CATEGORIES, mapping
 from pythermalcomfort.utilities import psy_ta_rh
 
 
@@ -39,7 +39,7 @@ def heat_index_schoen(
         from pythermalcomfort.models import heat_index_schoen
 
         result = heat_index_schoen(tdb=29, rh=50)
-        print(result.hi)  # 30
+        print(result.hi)  # 30.0
         print(result.stress_category)  # caution
     """
     # Validate inputs using the HeatIndexInputs class
@@ -58,13 +58,7 @@ def heat_index_schoen(
 
     hi = tdb - 1.0799 * np.exp(0.03755 * tdb) * (1 - np.exp(0.0801 * (t_dew - 14)))
 
-    heat_index_categories = {
-        -1000: "no risk",
-        32.0: "caution",
-        41.0: "extreme caution",
-        54.0: "danger",
-        1000.0: "extreme danger",
-    }
+    heat_index_categories = {27.0: "no risk", **HEAT_INDEX_STRESS_CATEGORIES}
 
     if round_output:
         hi = np.around(hi, 1)

@@ -22,7 +22,7 @@ def _expected_stress_category(hi):
     categories[hi <= 54] = "danger"
     categories[hi <= 41] = "extreme caution"
     categories[hi <= 32] = "caution"
-    categories[hi <= -1000] = "no risk"
+    categories[hi <= 27] = "no risk"
     categories[hi > 1000] = np.nan
     return categories
 
@@ -44,6 +44,14 @@ def test_scalar_no_rounding() -> None:
     expected = _expected_heat_index_schoen(29, 50)
 
     assert is_equal(result.hi, expected)
+
+
+def test_no_risk_category_below_lower_bound() -> None:
+    """Test that a mild, low-risk reading is categorized as 'no risk', not 'caution'."""
+    result = heat_index_schoen(tdb=10, rh=50)
+
+    assert result.hi < 27
+    assert result.stress_category == "no risk"
 
 
 def test_list_input() -> None:
