@@ -73,3 +73,27 @@ def test_extended_heat_index_array_input() -> None:
     """Test the heat index function with array inputs."""
     hi = heat_index_lu([20, 40], 50).hi
     assert np.allclose(hi, [19.0, 63.4], atol=0.1)
+
+
+def test_heat_index_lu_regression_values() -> None:
+    """Pin unrounded outputs against the reference (pre-numba) implementation.
+
+    Values were captured from the pure-Python implementation before it was
+    rewritten for numba, confirmed to match bit-for-bit across a wide random
+    sweep of tdb/rh combinations plus edge cases (rh=0, rh=100, tdb near
+    absolute zero).
+    """
+    cases = [
+        (-273.15, 50, -273.15),
+        (-40, 0, -40.03628046540541),
+        (-40, 100, -39.999999998230464),
+        (0, 0, -1.835038354014955),
+        (0, 100, -1.722924025671091e-09),
+        (25, 50, 24.979891812568553),
+        (50, 0, 42.232631716202036),
+        (50, 100, 151.4841566476622),
+        (100, 50, 370.6571594081703),
+    ]
+    for tdb, rh, expected in cases:
+        hi = heat_index_lu(tdb=tdb, rh=rh, round_output=False).hi
+        assert np.isclose(hi, expected, atol=1e-6), (tdb, rh, hi, expected)
