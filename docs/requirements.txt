@@ -2,6 +2,7 @@ sphinx
 sphinx-rtd-theme
 docutils
 urllib3>=2.6.3
+pillow>=10.3.0
 pydata-sphinx-theme
 sphinx-copybutton
 matplotlib
