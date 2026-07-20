@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+from numba import float64, vectorize
 
 from pythermalcomfort.classes_input import HIInputs, NumericInput
 from pythermalcomfort.classes_return import HI
@@ -56,7 +57,7 @@ def heat_index_schoen(
     # Calculate dew point temperature
     t_dew = psy_ta_rh(tdb, rh, p_atm=101325).dew_point_tmp
 
-    hi = tdb - 1.0799 * np.exp(0.03755 * tdb) * (1 - np.exp(0.0801 * (t_dew - 14)))
+    hi = _schoen_heat_index_optimized(tdb, t_dew)
 
     heat_index_categories = {27.0: "no risk", **HEAT_INDEX_STRESS_CATEGORIES}
 
@@ -64,3 +65,13 @@ def heat_index_schoen(
         hi = np.around(hi, 1)
 
     return HI(hi=hi, stress_category=mapping(hi, heat_index_categories))
+
+
+@vectorize(
+    [
+        float64(float64, float64),
+    ],
+    cache=True,
+)
+def _schoen_heat_index_optimized(tdb: float64, t_dew: float64) -> float64:
+    return tdb - 1.0799 * np.exp(0.03755 * tdb) * (1 - np.exp(0.0801 * (t_dew - 14)))
