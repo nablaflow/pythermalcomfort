@@ -1,6 +1,19 @@
 Changelog
 =========
 
+4.1.1 (2026-07-20)
+------------------
+
+* Sped up ``cooling_effect`` (~10x) by calling the already numba-jitted Gagge
+  two-node kernel directly instead of the full ``set_tmp()`` public API on
+  every root-finding iteration.
+* Sped up ``solar_gain`` (~100x+) with numba: table-based interpolation and
+  posture handling converted to JIT-compiled code.
+* Pinned ``pillow>=10.3.0`` in docs requirements to resolve a transitive
+  Snyk-flagged vulnerability.
+* Reduced the ``build-test-publish-testPyPI.yml`` CI matrix to speed up
+  TestPyPI release checks.
+
 4.1.0 (2026-07-20)
 ------------------
 
