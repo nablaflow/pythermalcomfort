@@ -354,8 +354,6 @@ def ireq(
         icl_out = icl_raw / 0.155
 
         non_physical = (ireq_out < 0) | (icl_out < 0)
-        ireq_out[non_physical] = np.nan
-        icl_out[non_physical] = np.nan
 
         if round_output:
             ireq_out = np.round(ireq_out, 1)
@@ -364,11 +362,12 @@ def ireq(
         dle_out = _format_dle(dle=dle, round_output=round_output)
 
         if limit_inputs:
+            ireq_out[non_physical] = np.nan
+            icl_out[non_physical] = np.nan
+            dle_out[non_physical] = np.nan
             ireq_out[~valid_inputs] = np.nan
             icl_out[~valid_inputs] = np.nan
             dle_out[~valid_inputs] = np.nan
-
-        dle_out[non_physical] = np.nan
 
         results[f"ireq_{suffix}"] = _scalar(ireq_out) if is_scalar else ireq_out
         results[f"icl_{suffix}"] = _scalar(icl_out) if is_scalar else icl_out

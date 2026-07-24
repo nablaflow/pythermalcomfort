@@ -190,6 +190,27 @@ def test_ireq_non_physical_outputs_masked_before_rounding():
     assert np.isnan(result.dle_min)
 
 
+def test_ireq_non_physical_outputs_not_masked_when_limit_inputs_false():
+    params = {
+        "tdb": 10.0,
+        "tr": 10.0,
+        "vr": 0.4,
+        "rh": 0.0,
+        "met": 350.0 / 58.15,
+        "clo": 0.0,
+        "p": 1.0,
+        "walk_sp": 0.9984,
+    }
+
+    result_limited = ireq(**params)
+    assert np.isnan(result_limited.ireq_min)
+    assert np.isnan(result_limited.icl_min)
+
+    result_unlimited = ireq(**params, limit_inputs=False)
+    assert result_unlimited.ireq_min < 0
+    assert result_unlimited.icl_min < 0
+
+
 def test_ireq_invalid_physical_inputs_raise():
     params = {
         "tdb": -15.0,
