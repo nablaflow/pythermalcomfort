@@ -140,6 +140,31 @@ class TestPmvPpd:
         with pytest.raises(ValueError):
             pmv_ppd_iso(25, 25, 0.1, 50, 1.1, 0.5, model="random")
 
+    def test_7730_2025_alias_matches_2005(self) -> None:
+        """Test that model="7730-2025" (the default) returns the same result as
+        "7730-2005", since the PMV/PPD formulae are unchanged between editions."""
+        kwargs = {
+            "tdb": 25,
+            "tr": 25,
+            "vr": 0.1,
+            "rh": 50,
+            "met": 1.4,
+            "clo": 0.5,
+        }
+        result_2005 = pmv_ppd_iso(**kwargs, model=Models.iso_7730_2005.value)
+        result_2025 = pmv_ppd_iso(**kwargs, model=Models.iso_7730_2025.value)
+        result_default = pmv_ppd_iso(**kwargs)
+
+        assert result_2005 == result_2025 == result_default
+
+    def test_returns_nan_for_pa_out_of_range(self) -> None:
+        """Test that the function returns NaN when the water vapour partial pressure
+        (pa) exceeds the ISO 7730 Clause 4 applicability limit of 2 700 Pa."""
+        # tdb=30, rh=100 gives pa ~4243 Pa, above the 2700 Pa limit
+        result = pmv_ppd_iso(tdb=30, tr=30, vr=0.1, rh=100, met=1.2, clo=0.5)
+        assert math.isnan(result.pmv)
+        assert math.isnan(result.ppd)
+
     def test_no_rounding(self) -> None:
         """Test that the function calculates PMV and PPD without rounding."""
         np.isclose(
