@@ -30,7 +30,7 @@ def read(*names: str, encoding: str = "utf8") -> str:
 
 setup(
     name="pythermalcomfort",
-    version="4.2.0",
+    version="4.3.0",
     license="MIT",
     description=(
         "pythermalcomfort is a comprehensive toolkit for calculating "
