@@ -13,7 +13,7 @@ def test_ireq_scalar_example():
     result = ireq(
         tdb=-15.0,
         tr=-15.0,
-        v=2.0,
+        vr=2.0,
         rh=55.0,
         met=MET_175_W_M2,
         clo=2.8,
@@ -34,7 +34,7 @@ def test_ireq_scalar_example():
     (
         "tdb",
         "tr",
-        "v",
+        "vr",
         "met_w_m2",
         "clo",
         "expected_ireq_neutral",
@@ -55,7 +55,7 @@ def test_ireq_scalar_example():
 def test_ireq_iso_11079_table_f1(
     tdb,
     tr,
-    v,
+    vr,
     met_w_m2,
     clo,
     expected_ireq_neutral,
@@ -67,7 +67,7 @@ def test_ireq_iso_11079_table_f1(
     result = ireq(
         tdb=tdb,
         tr=tr,
-        v=v,
+        vr=vr,
         rh=85,
         met=met_w_m2 / 58.15,
         clo=clo,
@@ -89,7 +89,7 @@ def test_ireq_vectorized_inputs():
     result = ireq(
         tdb=[-15.0, -10.0],
         tr=[-15.0, -10.0],
-        v=[2.0, 1.0],
+        vr=[2.0, 1.0],
         rh=[55.0, 50.0],
         met=[MET_175_W_M2, MET_116_W_M2],
         clo=[2.8, 1.5],
@@ -111,7 +111,7 @@ def test_ireq_limit_inputs_returns_nan_outside_iso_range():
     params = {
         "tdb": -15.0,
         "tr": -15.0,
-        "v": 0.2,
+        "vr": 0.2,
         "rh": 55.0,
         "met": MET_175_W_M2,
         "clo": 2.8,
@@ -138,7 +138,7 @@ def test_ireq_accepts_upper_met_boundary_with_max_walk_speed():
     result = ireq(
         tdb=-15.0,
         tr=-15.0,
-        v=2.0,
+        vr=2.0,
         rh=55.0,
         met=MET_400_W_M2,
         clo=2.8,
@@ -156,7 +156,7 @@ def test_ireq_uses_wme_met_units_and_numeric_dle():
     result = ireq(
         tdb=-15.0,
         tr=-15.0,
-        v=2.0,
+        vr=2.0,
         rh=55.0,
         met=MET_175_W_M2,
         clo=2.8,
@@ -177,7 +177,7 @@ def test_ireq_non_physical_outputs_masked_before_rounding():
     result = ireq(
         tdb=10.0,
         tr=10.0,
-        v=0.4,
+        vr=0.4,
         rh=0.0,
         met=250.0 / 58.15,
         clo=0.0,
@@ -194,7 +194,7 @@ def test_ireq_invalid_physical_inputs_raise():
     params = {
         "tdb": -15.0,
         "tr": -15.0,
-        "v": 2.0,
+        "vr": 2.0,
         "rh": 55.0,
         "met": MET_175_W_M2,
         "clo": 2.8,
@@ -219,7 +219,7 @@ def test_ireq_broadcasts_mixed_scalar_and_array_inputs():
     result = ireq(
         tdb=[-15.0, -10.0],
         tr=-15.0,
-        v=2.0,
+        vr=2.0,
         rh=55.0,
         met=MET_175_W_M2,
         clo=2.8,

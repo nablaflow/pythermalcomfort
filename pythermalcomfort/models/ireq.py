@@ -10,7 +10,7 @@ from pythermalcomfort.utilities import met_to_w_m2
 def ireq(
     tdb,
     tr,
-    v,
+    vr,
     rh,
     met,
     clo,
@@ -33,8 +33,8 @@ def ireq(
         Dry bulb air temperature, [deg C].
     tr : float or list of floats
         Mean radiant temperature, [deg C].
-    v : float or list of floats
-        Relative air velocity, [m/s].
+    vr : float or list of floats
+        Relative air speed, [m/s].
     rh : float or list of floats
         Relative humidity, [%].
     met : float or list of floats
@@ -55,7 +55,7 @@ def ireq(
         .. note::
             The ISO 11079 applicability limits used by this function are
             58 <= met [W/m2] <= 400 after converting the input metabolic rate
-            from met to W/m2, tdb <= 10 [deg C], 0.4 <= v [m/s] <= 18, and
+            from met to W/m2, tdb <= 10 [deg C], 0.4 <= vr [m/s] <= 18, and
             minimum_walking_speed <= walk_sp [m/s] <= 1.2, where
             minimum_walking_speed = min(0.0052 * (met [W/m2] - 58), 1.2).
 
@@ -78,7 +78,7 @@ def ireq(
     ValueError
         If inputs are not broadcastable to a common shape, contain non-finite
         values, or fail physical validation. The physical validation rejects
-        ``met <= 0``, ``wme < 0``, ``p <= 0``, ``v < 0``, ``walk_sp < 0``,
+        ``met <= 0``, ``wme < 0``, ``p <= 0``, ``vr < 0``, ``walk_sp < 0``,
         relative humidity outside 0 to 100 %, and ``clo < 0``.
 
     Examples
@@ -90,7 +90,7 @@ def ireq(
         result = ireq(
             tdb=-15.0,
             tr=-15.0,
-            v=2.0,
+            vr=2.0,
             rh=55.0,
             met=175.0 / 58.15,
             clo=2.8,
@@ -106,13 +106,13 @@ def ireq(
     """
 
     is_scalar = all(
-        np.isscalar(value) for value in [tdb, tr, v, rh, met, clo, p, walk_sp, wme]
+        np.isscalar(value) for value in [tdb, tr, vr, rh, met, clo, p, walk_sp, wme]
     )
 
     inputs = IREQInputs(
         tdb=tdb,
         tr=tr,
-        v=v,
+        vr=vr,
         rh=rh,
         met=met,
         clo=clo,
@@ -125,7 +125,7 @@ def ireq(
 
     tdb = inputs.tdb
     tr = inputs.tr
-    v = inputs.v
+    vr = inputs.vr
     rh = inputs.rh
     clo = inputs.clo
     p = inputs.p
@@ -136,12 +136,12 @@ def ireq(
     valid_inputs = _valid_iso_11079_inputs(
         met=met,
         tdb=tdb,
-        v=v,
+        vr=vr,
         walk_sp=walk_sp,
     )
 
     clo_m2c_w = clo * 0.155
-    air_insulation = 0.092 * np.exp(-0.15 * v - 0.22 * walk_sp) - 0.0045
+    air_insulation = 0.092 * np.exp(-0.15 * vr - 0.22 * walk_sp) - 0.0045
 
     expired_air_temperature = 29.0 + 0.2 * tdb
     expired_air_vapor_pressure = 0.1333 * np.exp(
@@ -250,7 +250,7 @@ def ireq(
             fcl_storage = 1.0 + 1.197 * resultant_clothing_insulation
             constant_part = _clothing_constant_part(
                 p=p,
-                v=v,
+                vr=vr,
                 walk_sp=walk_sp,
             )
             resultant_clothing_insulation = (
@@ -342,7 +342,7 @@ def ireq(
 
         constant_part = _clothing_constant_part(
             p=p,
-            v=v,
+            vr=vr,
             walk_sp=walk_sp,
         )
 
@@ -384,27 +384,32 @@ def ireq(
     )
 
 
-def _clothing_constant_part(p, v, walk_sp):
+def _clothing_constant_part(p, vr, walk_sp):
+    """Compute the ISO 11079 Annex A wind/permeability correction factor shared by the
+    total and resultant clothing insulation calculations."""
     return (
-        0.54 * np.exp(-0.15 * v - 0.22 * walk_sp) * (p**0.075) - 0.06 * np.log(p) + 0.5
+        0.54 * np.exp(-0.15 * vr - 0.22 * walk_sp) * (p**0.075) - 0.06 * np.log(p) + 0.5
     )
 
 
-def _valid_iso_11079_inputs(met, tdb, v, walk_sp):
+def _valid_iso_11079_inputs(met, tdb, vr, walk_sp):
+    """Return a boolean mask of inputs within the ISO 11079 applicability limits."""
     minimum_walking_speed = np.minimum(0.0052 * (met - 58.0), 1.2)
 
     return (
         (met >= 58.0)
         & (met <= 400.0)
         & (tdb <= 10.0)
-        & (v >= 0.4)
-        & (v <= 18.0)
+        & (vr >= 0.4)
+        & (vr <= 18.0)
         & (walk_sp >= minimum_walking_speed)
         & (walk_sp <= 1.2)
     )
 
 
 def _format_dle(dle, round_output):
+    """Convert raw Duration Limited Exposure hours to the ISO 11079 output format,
+    replacing values above the 8 h ceiling with "more than 8"."""
     dle_out = np.empty(dle.shape, dtype=object)
     unlimited = (dle > 8.0) | (dle < 0)
     dle_out[unlimited] = "more than 8"
@@ -418,6 +423,7 @@ def _format_dle(dle, round_output):
 
 
 def _scalar(value):
+    """Extract the single element of a length-1 array as a Python scalar."""
     item = value[0]
     if isinstance(item, np.generic):
         return item.item()

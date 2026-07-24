@@ -1273,7 +1273,7 @@ class IREQInputs(BaseInputs):
         self,
         tdb,
         tr,
-        v,
+        vr,
         rh,
         met,
         clo,
@@ -1288,7 +1288,7 @@ class IREQInputs(BaseInputs):
         super().__init__(
             tdb=tdb,
             tr=tr,
-            v=v,
+            vr=vr,
             rh=rh,
             met=met,
             clo=clo,
@@ -1303,7 +1303,7 @@ class IREQInputs(BaseInputs):
         values = {
             "tdb": self.tdb,
             "tr": self.tr,
-            "v": self.v,
+            "vr": self.vr,
             "rh": self.rh,
             "met": self.met,
             "clo": self.clo,
@@ -1335,8 +1335,8 @@ class IREQInputs(BaseInputs):
             raise ValueError("External work (wme) must be non-negative.")
         if np.any(self.p <= 0):
             raise ValueError("Air permeability (p) must be greater than 0.")
-        if np.any(self.v < 0):
-            raise ValueError("Relative air speed (v) must be non-negative.")
+        if np.any(self.vr < 0):
+            raise ValueError("Relative air speed (vr) must be non-negative.")
         if np.any(self.walk_sp < 0):
             raise ValueError("Walking speed (walk_sp) must be non-negative.")
         if np.any(self.rh < 0) or np.any(self.rh > 100):
