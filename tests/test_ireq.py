@@ -101,10 +101,15 @@ def test_ireq_vectorized_inputs():
     assert np.allclose(result.ireq_neutral[0], 1.9)
     assert np.allclose(result.icl_min[0], 2.2)
     assert np.allclose(result.icl_neutral[0], 2.6)
-    assert np.isfinite(result.ireq_min[1])
-    assert np.isfinite(result.ireq_neutral[1])
     assert result.dle_min[0] == "more than 8"
     assert result.dle_neutral[0] == "more than 8"
+
+    assert np.allclose(result.ireq_min[1], 2.2)
+    assert np.allclose(result.ireq_neutral[1], 2.6)
+    assert np.allclose(result.icl_min[1], 2.5)
+    assert np.allclose(result.icl_neutral[1], 2.9)
+    assert np.allclose(result.dle_min[1], 0.8)
+    assert np.allclose(result.dle_neutral[1], 0.6)
 
 
 def test_ireq_limit_inputs_returns_nan_outside_iso_range():
@@ -250,9 +255,11 @@ def test_ireq_broadcasts_mixed_scalar_and_array_inputs():
 
     assert result.ireq_min.shape == (2,)
     assert result.ireq_neutral.shape == (2,)
+    assert np.allclose(result.ireq_min, [1.6, 1.4])
+    assert np.allclose(result.ireq_neutral, [1.9, 1.7])
 
 
 def test_ireq_public_api_export():
-    from pythermalcomfort.models import ireq as public_ireq
+    from pythermalcomfort.models.ireq import ireq as implementation_ireq
 
-    assert public_ireq is ireq
+    assert ireq is implementation_ireq

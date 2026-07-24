@@ -142,6 +142,7 @@ def ireq(
 
     clo_m2c_w = clo * 0.155
     air_insulation = 0.092 * np.exp(-0.15 * vr - 0.22 * walk_sp) - 0.0045
+    constant_part = _clothing_constant_part(p=p, vr=vr, walk_sp=walk_sp)
 
     expired_air_temperature = 29.0 + 0.2 * tdb
     expired_air_vapor_pressure = 0.1333 * np.exp(
@@ -248,11 +249,6 @@ def ireq(
                 break
 
             fcl_storage = 1.0 + 1.197 * resultant_clothing_insulation
-            constant_part = _clothing_constant_part(
-                p=p,
-                vr=vr,
-                walk_sp=walk_sp,
-            )
             resultant_clothing_insulation = (
                 clo_m2c_w + 0.085 / fcl_storage
             ) * constant_part - air_insulation / fcl_storage
@@ -339,12 +335,6 @@ def ireq(
 
         with np.errstate(divide="ignore", invalid="ignore"):
             dle = -40.0 / storage
-
-        constant_part = _clothing_constant_part(
-            p=p,
-            vr=vr,
-            walk_sp=walk_sp,
-        )
 
         ireq_out = ireq_final / 0.155
         fcl_final = 1.0 + 1.197 * ireq_final
