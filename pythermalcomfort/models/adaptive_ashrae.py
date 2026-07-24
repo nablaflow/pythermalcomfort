@@ -2,25 +2,29 @@ from typing import Literal
 
 import numpy as np
 
-from pythermalcomfort.classes_input import ASHRAEInputs
+from pythermalcomfort.classes_input import ASHRAEInputs, NumericInput
 from pythermalcomfort.classes_return import AdaptiveASHRAE
 from pythermalcomfort.shared_functions import valid_range
 from pythermalcomfort.utilities import (
-    Models,
     Units,
-    _check_standard_compliance_array,
+    _check_ashrae55_compliance,
+    adaptive_cooling_effect,
     operative_tmp,
     units_converter,
 )
 
+SLOPE: float = 0.31
+INTERCEPT: float = 17.8
+
 
 def adaptive_ashrae(
-    tdb: float | list[float],
-    tr: float | list[float],
-    t_running_mean: float | list[float],
-    v: float | list[float],
+    tdb: NumericInput,
+    tr: NumericInput,
+    t_running_mean: NumericInput,
+    v: NumericInput,
     units: Literal["SI", "IP"] = Units.SI.value,
     limit_inputs: bool = True,
+    round_output: bool = True,
 ) -> AdaptiveASHRAE:
     """Calculate the adaptive thermal comfort based on ASHRAE 55.
 
@@ -56,6 +60,14 @@ def adaptive_ashrae(
 
         .. note::
             ASHRAE 55 2020 limits: 10 < tdb [°C] < 40, 10 < tr [°C] < 40, 0 < vr [m/s] < 2, 10 < t_running_mean [°C] < 33.5.
+
+    round_output : bool, optional
+        If True, rounds ``t_cmf`` to one decimal place in SI before the comfort bounds are
+        derived, so ``tmp_cmf_80_low``, ``tmp_cmf_80_up``, ``tmp_cmf_90_low`` and
+        ``tmp_cmf_90_up`` inherit that rounding. If False, ``t_cmf`` and the derived bounds
+        are returned at full precision. Under ``units='IP'`` the rounded SI value is then
+        converted to °F, so IP outputs carry the extra decimals from the °C-to-°F conversion.
+        Defaults to True.
 
     Returns
     -------
@@ -97,6 +109,7 @@ def adaptive_ashrae(
         t_running_mean=t_running_mean,
         v=v,
         units=units,
+        round_output=round_output,
     )
 
     tdb = np.asarray(tdb)
@@ -113,26 +126,19 @@ def adaptive_ashrae(
             v=v,
         )
 
-    tdb_valid, tr_valid, v_valid = _check_standard_compliance_array(
-        Models.ashrae_55_2023.value,
-        tdb=tdb,
-        tr=tr,
-        v=v,
-    )
-    trm_valid = valid_range(t_running_mean, (10.0, 33.5))
-
     to = operative_tmp(tdb, tr, v, standard=standard)
 
-    # Calculate cooling effect (ce) of elevated air speed when top > 25 degC.
-    ce = np.where((v >= 0.6) & (to >= 25.0), 999, 0)
-    ce = np.where((v < 0.9) & (ce == 999), 1.2, ce)
-    ce = np.where((v < 1.2) & (ce == 999), 1.8, ce)
-    ce = np.where(ce == 999, 2.2, ce)
+    ce = adaptive_cooling_effect(v, to)
 
-    # Relation between comfort and outdoor temperature
-    t_cmf = 0.31 * t_running_mean + 17.8
+    t_cmf = SLOPE * t_running_mean + INTERCEPT
 
     if limit_inputs:
+        tdb_valid, tr_valid, v_valid = _check_ashrae55_compliance(
+            tdb=tdb,
+            tr=tr,
+            v=v,
+        )
+        trm_valid = valid_range(t_running_mean, (10.0, 33.5))
         all_valid = ~(
             np.isnan(tdb_valid)
             | np.isnan(tr_valid)
@@ -141,7 +147,8 @@ def adaptive_ashrae(
         )
         t_cmf = np.where(all_valid, t_cmf, np.nan)
 
-    t_cmf = np.around(t_cmf, 1)
+    if round_output:
+        t_cmf = np.around(t_cmf, 1)
 
     tmp_cmf_80_low = t_cmf - 3.5
     tmp_cmf_90_low = t_cmf - 2.5

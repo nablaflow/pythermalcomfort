@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import numpy as np
+from numba import float64, vectorize
 
-from pythermalcomfort.classes_input import HIInputs
+from pythermalcomfort.classes_input import HIInputs, NumericInput
 from pythermalcomfort.classes_return import HI
-from pythermalcomfort.shared_functions import mapping
+from pythermalcomfort.shared_functions import (
+    HEAT_INDEX_STRESS_CATEGORIES,
+    mapping,
+    valid_range,
+)
 
 
 def heat_index_rothfusz(
-    tdb: float | list[float],
-    rh: float | list[float],
+    tdb: NumericInput,
+    rh: NumericInput,
     round_output: bool = True,
     limit_inputs: bool = True,
 ) -> HI:
@@ -24,6 +29,15 @@ def heat_index_rothfusz(
         Relative humidity, [%].
     round_output : bool, optional
         If True, rounds output value. If False, it does not round it. Defaults to True.
+    limit_inputs : bool, optional
+        If True, limits the inputs to the standard applicability limits. Defaults to True.
+
+        .. note::
+            By default, if the inputs are outside the standard applicability limits the
+            function returns NaN. If False returns heat index
+            values even if input values are outside the applicability limits of the model.
+
+            The applicability limit is tdb >= 27°C.
 
     Returns
     -------
@@ -52,28 +66,38 @@ def heat_index_rothfusz(
     tdb = np.asarray(tdb)
     rh = np.asarray(rh)
 
-    hi = -8.784695 + 1.61139411 * tdb + 2.338549 * rh - 0.14611605 * tdb * rh
-    hi += -1.2308094 * 10**-2 * tdb**2 - 1.6424828 * 10**-2 * rh**2
-    hi += 2.211732 * 10**-3 * tdb**2 * rh + 7.2546 * 10**-4 * tdb * rh**2
-    hi += -3.582 * 10**-6 * tdb**2 * rh**2
+    hi = _rothfusz_heat_index_optimized(tdb, rh)
 
     # heat index should only be calculated for temperatures above 27 °C
     if limit_inputs:
-        tdb_valid = np.where((tdb >= 27.0), tdb, np.nan)
-        all_valid = ~(np.isnan(tdb_valid))
-        hi_valid = np.where(all_valid, hi, np.nan)
+        tdb_valid = valid_range(tdb, (27.0, np.inf))
+        hi_valid = np.where(~np.isnan(tdb_valid), hi, np.nan)
     else:
         hi_valid = hi
 
-    heat_index_categories = {
-        27.0: "no risk",
-        32.0: "caution",
-        41.0: "extreme caution",
-        54.0: "danger",
-        1000.0: "extreme danger",
-    }
+    heat_index_categories = {27.0: "no risk", **HEAT_INDEX_STRESS_CATEGORIES}
 
     if round_output:
         hi_valid = np.around(hi_valid, 1)
 
     return HI(hi=hi_valid, stress_category=mapping(hi_valid, heat_index_categories))
+
+
+@vectorize(
+    [
+        float64(float64, float64),
+    ],
+    cache=True,
+)
+def _rothfusz_heat_index_optimized(tdb: float64, rh: float64) -> float64:
+    return (
+        -8.784695
+        + 1.61139411 * tdb
+        + 2.338549 * rh
+        - 0.14611605 * tdb * rh
+        - 1.2308094e-2 * tdb**2
+        - 1.6424828e-2 * rh**2
+        + 2.211732e-3 * tdb**2 * rh
+        + 7.2546e-4 * tdb * rh**2
+        - 3.582e-6 * tdb**2 * rh**2
+    )

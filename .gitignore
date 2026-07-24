@@ -1,6 +1,8 @@
 *.py[cod]
 __pycache__
 
+Pipfile.lock
+
 # C extensions
 *.so
 
@@ -47,6 +49,7 @@ htmlcov
 .idea
 *.iml
 *.komodoproject
+.vscode
 
 # Complexity
 output/*.html

@@ -4,6 +4,7 @@ References
 .. [11079ISO2007] ISO, 2007. ISO 11079 - Ergonomics of the thermal environment - Determination and interpretation of cold stress when using required clothing insulation (IREQ) and local cooling effects.
 .. [55ASHRAE2023] ANSI, & ASHRAE. (2023). Thermal Environmental Conditions for Human Occupancy. Atlanta.
 .. [7730ISO2005] ISO. (2005). ISO 7730 - Ergonomics of the thermal environment — Analytical determination and interpretation of thermal comfort using calculation of the PMV and PPD indices and local thermal comfort criteria.
+.. [7730ISO2025] ISO. (2025). ISO 7730 - Ergonomics of the thermal environment — Analytical determination and interpretation of thermal comfort using calculation of the PMV and PPD indices and local thermal comfort criteria.
 .. [16798EN2019] EN, & BSI. (2019). Energy performance of buildings - Ventilation for buildings. BSI Standards Limited 2019.
 .. [Schiavon2013] Schiavon, S., & Lee, K. H. (2013). Dynamic predictive clothing insulation models based on outdoor air and indoor operative temperatures. Building and Environment, 59, 250–260. doi.org/10.1016/j.buildenv.2012.08.024
 .. [7726ISO1998] ISO. (1998). ISO 7726 - Ergonomics of the thermal environment instruments for measuring physical quantities.
@@ -41,6 +42,7 @@ References
 .. [Kjellstrom2018] Kjellstrom T, Freyberg C, Lemke B, Otto M, Briggs D. Estimating population heat exposure and impacts on working people in conjunction with climate change. International Journal of Biometeorology. 2018 Mar;62(3):291-306.
 .. [Ji2022] Ji L, Laouadi A, Wang L, Lacasse MA. Development of a bioheat model for older people under hot and cold exposures. Building Simulation. 2022;15(10):1815-1829.
 .. [Yan2025] Yan J, Tong Z, Wang Y, Feng S, Su Y, Song Y, Wen Q, Yin C. From measurements to regulations: An actionable approach for sustainable urban cooling via heat-resilient urban planning. Sustainable Cities and Society. 2025;125:106361.
+.. [Schoen2005] Schoen, Carl. 2005. “A New Empirical Model of the Temperature–Humidity Index.” Journal of Applied Meteorology and Climatology 44 (9): 1413–20. https://doi.org/10.1175/JAM2285.1.
 .. [Schlatter1987] Schlatter TW. Temperature-humidity index. In: Climatology. Encyclopedia of Earth Science. Springer; 1987. DOI: 10.1007/0-387-30749-4_176
 .. [Forbes2025] Forbes C, Coccarelli A, Xu Z, Meade RD, Kenny GP, Binnewies S, Bach AJE. Biophysical versus machine learning models for predicting rectal and skin temperatures in older adults. J Therm Biol. 2025 Feb;128:104078. DOI: 10.1016/j.jtherbio.2025.104078. Epub 2025 Feb 22. PMID: 40010162.
 .. [SportsHeatStress2025] Tartarini F, Smallcombe JW, Lynch GP, Cross TJ, Broderick C, Jay O. The Sports Medicine Australia extreme heat risk and response guidelines and web tool. Journal of Science and Medicine in Sport. 2025;28(9):690-699. DOI: 10.1016/j.jsams.2025.03.006

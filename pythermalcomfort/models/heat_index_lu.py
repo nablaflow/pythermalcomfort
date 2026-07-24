@@ -3,14 +3,15 @@ from __future__ import annotations
 import math
 
 import numpy as np
+from numba import float64, njit, vectorize
 
-from pythermalcomfort.classes_input import HIInputs
+from pythermalcomfort.classes_input import HIInputs, NumericInput
 from pythermalcomfort.classes_return import HI
 
 
 def heat_index_lu(
-    tdb: float | list[float],
-    rh: float | list[float],
+    tdb: NumericInput,
+    rh: NumericInput,
     round_output: bool = True,
 ) -> HI:
     """Calculate the Heat Index (HI) in accordance with the Lu and Romps (2022) model
@@ -51,7 +52,7 @@ def heat_index_lu(
     tdb = np.asarray(tdb)
     rh = np.asarray(rh)
 
-    hi = _lu_heat_index_vectorized(tdb + 273.15, rh / 100) - 273.15
+    hi = _lu_heat_index_optimized(tdb + 273.15, rh / 100) - 273.15
 
     if round_output:
         hi = np.around(hi, 1)
@@ -59,283 +60,304 @@ def heat_index_lu(
     return HI(hi=hi)
 
 
-# combining the two functions find_eqvar and find_T
-@np.vectorize
-def _lu_heat_index_vectorized(
-    tdb: np.ndarray, rh: np.ndarray
-) -> np.ndarray:  # Thermodynamic parameters
-    t_c_k = 273.16  # K
-    p_triple_point = 611.65  # Pa
-    e0v = 2.3740e6  # J/kg
-    e0s = 0.3337e6  # J/kg
-    rgasa = 287.04  # J/kg/K
-    rgasv = 461.0  # J/kg/K
-    cva = 719.0  # J/kg/K
-    cvv = 1418.0  # J/kg/K
-    cvl = 4119.0  # J/kg/K
-    cvs = 1861.0  # J/kg/K
-    cpa = cva + rgasa
-    cpv = cvv + rgasv
+# Thermodynamic parameters
+_T_C_K = 273.16  # K
+_P_TRIPLE_POINT = 611.65  # Pa
+_E0V = 2.3740e6  # J/kg
+_E0S = 0.3337e6  # J/kg
+_RGASA = 287.04  # J/kg/K
+_RGASV = 461.0  # J/kg/K
+_CVA = 719.0  # J/kg/K
+_CVV = 1418.0  # J/kg/K
+_CVL = 4119.0  # J/kg/K
+_CVS = 1861.0  # J/kg/K
+_CPA = _CVA + _RGASA
+_CPV = _CVV + _RGASV
 
-    # The saturation vapor pressure
-    def pv_star(t):
-        if t == 0.0:
-            return 0.0
-        if t < t_c_k:
-            return (
-                p_triple_point
-                * (t / t_c_k) ** ((cpv - cvs) / rgasv)
-                * math.exp(
-                    (e0v + e0s - (cvv - cvs) * t_c_k) / rgasv * (1.0 / t_c_k - 1.0 / t),
-                )
-            )
+# Thermo-regulatory parameters
+_SIGMA = 5.67e-8  # W/m^2/K^4 , Stefan-Boltzmann constant
+_EPSILON = 0.97  # emissivity of surface, steadman1979
+_MASS = 83.6  # kg, mass of average US adults, fryar2018
+_HEIGHT = 1.69  # m, height of average US adults, fryar2018
+_AREA = 0.202 * (_MASS**0.425) * (_HEIGHT**0.725)  # m^2, DuBois formula, parson2014
+_CPC = 3492.0  # J/kg/K, specific heat capacity of core, gagge1972
+_HC_CORE = _MASS * _CPC / _AREA  # heat capacity of core
+_R = 124.0  # Pa/K, Zf/rf, steadman1979
+_Q = 180.0  # W/m^2, metabolic rate per skin area, steadman1979
+_PHI_SALT = 0.9  # vapor saturation pressure level of saline solution, steadman1979
+_T_CR = 310.0  # K, core temperature, steadman1979
+_P = 1.013e5  # Pa, atmospheric pressure
+_ETA = 1.43e-6  # kg/J, "inhaled mass" / "metabolic rate", steadman1979
+_PA0 = 1.6e3  # Pa, reference air vapor pressure in regions III, IV, V, VI, steadman1979
+
+_ZA = 60.6 / 17.4  # Pa m^2/W, mass transfer resistance through air, exposed skin
+_ZA_BAR = 60.6 / 11.6  # Pa m^2/W, mass transfer resistance through air, clothed skin
+_ZA_UN = 60.6 / 12.3  # Pa m^2/W, mass transfer resistance through air, naked
+
+# tolerance and maximum iteration for the root solver
+_TOL = 1e-8
+_TOL_T = 1e-8
+_MAX_ITER = 100
+
+# equivalent-variable codes, replacing the original string keys so this can be
+# jitted in nopython mode ("rs" and "rs*" collapse to the same code because
+# find_t/_find_t treats them identically; only the (unused) region label differed)
+_EQ_PHI = 1
+_EQ_RF = 2
+_EQ_RS = 3
+_EQ_DTCDT = 4
+
+# residual-function codes dispatched by _residual/_bisect
+_R_TS = 1
+_R_TF = 2
+_R_TF_REGION_II_III = 3
+_R_TS_REGION_IV_V = 4
+_R_TS_REGION_V = 5
+_R_T_PHI = 6
+_R_T_RF = 7
+_R_T_RS = 8
+_R_T_DTCDT = 9
+
+
+@njit(cache=True)
+def _pv_star(t):  # The saturation vapor pressure
+    if t == 0.0:
+        return 0.0
+    if t < _T_C_K:
         return (
-            p_triple_point
-            * (t / t_c_k) ** ((cpv - cvl) / rgasv)
+            _P_TRIPLE_POINT
+            * (t / _T_C_K) ** ((_CPV - _CVS) / _RGASV)
             * math.exp(
-                (e0v - (cvv - cvl) * t_c_k) / rgasv * (1.0 / t_c_k - 1.0 / t),
+                (_E0V + _E0S - (_CVV - _CVS) * _T_C_K)
+                / _RGASV
+                * (1.0 / _T_C_K - 1.0 / t)
             )
         )
+    return (
+        _P_TRIPLE_POINT
+        * (t / _T_C_K) ** ((_CPV - _CVL) / _RGASV)
+        * math.exp((_E0V - (_CVV - _CVL) * _T_C_K) / _RGASV * (1.0 / _T_C_K - 1.0 / t))
+    )
 
-    # The latent heat of vaporization of water
-    def latent_heat_vap(t):
-        return e0v + (cvv - cvl) * (t - t_c_k) + rgasv * t
 
-    # Thermo-regulatory parameters
-    sigma = 5.67e-8  # W/m^2/K^4 , Stefan-Boltzmann constant
-    epsilon = 0.97  # emissivity of surface, steadman1979
-    mass = 83.6  # kg, mass of average US adults, fryar2018
-    height = 1.69  # m, height of average US adults, fryar2018
-    area = 0.202 * (mass**0.425) * (height**0.725)  # m^2, DuBois formula, parson2014
-    cpc = 3492.0  # J/kg/K, specific heat capacity of core, gagge1972
-    hc_core = mass * cpc / area  # heat capacity of core
-    r = 124.0  # Pa/K, Zf/rf, steadman1979
-    q = 180.0  # W/m^2, metabolic rate per skin area, steadman1979
-    phi_salt = 0.9  # vapor saturation pressure level of saline solution, steadman1979
-    t_cr = 310.0  # K, core temperature, steadman1979
-    p_cr = phi_salt * pv_star(t_cr)  # core vapor pressure
-    lat_heat = latent_heat_vap(310.0)  # latent heat of vaporization at 310 K
-    p = 1.013e5  # Pa, atmospheric pressure
-    eta = 1.43e-6  # kg/J, "inhaled mass" / "metabolic rate", steadman1979
-    pa0 = 1.6e3  # Pa, reference air vapor pressure in regions III, IV, V, VI, steadman1979
+@njit(cache=True)
+def _latent_heat_vap(t):  # The latent heat of vaporization of water
+    return _E0V + (_CVV - _CVL) * (t - _T_C_K) + _RGASV * t
 
-    za = (
-        60.6 / 17.4
-    )  # Pa m^2/W, mass transfer resistance through air, exposed part of skin
-    za_bar = (
-        60.6 / 11.6
-    )  # Pa m^2/W, mass transfer resistance through air, clothed part of skin
-    za_un = (
-        60.6 / 12.3
-    )  # Pa m^2/W, mass transfer resistance through air, when being naked
 
-    # tolerance and maximum iteration for the root solver
-    tol = 1e-8
-    tol_t = 1e-8
-    max_iter = 100
+# .py_func calls the plain-Python version of these njit functions, so computing
+# these two module-level constants doesn't trigger numba compilation at import
+# time (which would otherwise add a noticeable, unnecessary import-time cost).
+_P_CR = _PHI_SALT * _pv_star.py_func(_T_CR)  # core vapor pressure
+_LAT_HEAT = _latent_heat_vap.py_func(310.0)  # latent heat of vaporization at 310 K
 
-    # Thermo-regulatory functions
-    def qv(ta, pa):  # respiratory heat loss, W/m^2
+
+@njit(cache=True)
+def _qv(ta, pa):  # respiratory heat loss, W/m^2
+    return (
+        _ETA
+        * _Q
+        * (_CPA * (_T_CR - ta) + _LAT_HEAT * _RGASA / (_P * _RGASV) * (_P_CR - pa))
+    )
+
+
+@njit(cache=True)
+def _zs(rs):  # mass transfer resistance through skin, Pa m^2/W
+    return 52.1 if rs == 0.0387 else 6.0e8 * rs**5
+
+
+@njit(cache=True)
+def _ra(ts, ta):  # heat transfer resistance through air, exposed skin, K m^2/W
+    hc = 17.4
+    phi_rad = 0.85
+    hr = _EPSILON * phi_rad * _SIGMA * (ts**2 + ta**2) * (ts + ta)
+    return 1.0 / (hc + hr)
+
+
+@njit(cache=True)
+def _ra_bar(tf, ta):  # heat transfer resistance through air, clothed skin, K m^2/W
+    hc = 11.6
+    phi_rad = 0.79
+    hr = _EPSILON * phi_rad * _SIGMA * (tf**2 + ta**2) * (tf + ta)
+    return 1.0 / (hc + hr)
+
+
+@njit(cache=True)
+def _ra_un(ts, ta):  # heat transfer resistance through air, when naked, K m^2/W
+    hc = 12.3
+    phi_rad = 0.80
+    hr = _EPSILON * phi_rad * _SIGMA * (ts**2 + ta**2) * (ts + ta)
+    return 1.0 / (hc + hr)
+
+
+@njit(cache=True)
+def _find_eq_var(ta, rh):
+    """Given air temperature [K] and relative humidity, return the equivalent variable.
+
+    Returns (eq_var_code, phi, rf, rs, d_tc_dt).
+    """
+    pa = rh * _pv_star(ta)  # air vapor pressure
+    rs = 0.0387  # m^2K/W, heat transfer resistance through skin
+    phi = 0.84  # covering fraction
+    d_tc_dt = 0.0  # K/s, rate of change in Tc
+
+    m = (_P_CR - pa) / (_zs(rs) + _ZA)
+    m_bar = (_P_CR - pa) / (_zs(rs) + _ZA_BAR)
+
+    lo_ts = max(0.0, min(_T_CR, ta) - rs * abs(m))
+    hi_ts = max(_T_CR, ta) + rs * abs(m)
+    ts = _bisect(_R_TS, ta, pa, rs, 0.0, lo_ts, hi_ts, _TOL)
+
+    lo_tf = max(0.0, min(_T_CR, ta) - rs * abs(m_bar))
+    hi_tf = max(_T_CR, ta) + rs * abs(m_bar)
+    tf = _bisect(_R_TF, ta, pa, rs, 0.0, lo_tf, hi_tf, _TOL)
+
+    q_minus_qv = _Q - _qv(ta, pa)
+    flux1 = q_minus_qv - (1.0 - phi) * (_T_CR - ts) / rs  # C*dTc/dt when rf=Zf=inf
+    flux2 = (
+        q_minus_qv - (1.0 - phi) * (_T_CR - ts) / rs - phi * (_T_CR - tf) / rs
+    )  # C*dTc/dt when rf=Zf=0
+
+    if flux1 <= 0.0:  # region I
+        eq_var_code = _EQ_PHI
+        phi = 1.0 - q_minus_qv * rs / (_T_CR - ts)
+        rf = np.inf
+    elif flux2 <= 0.0:  # region II&III
+        eq_var_code = _EQ_RF
+        ts_bar = _T_CR - q_minus_qv * rs / phi + (1.0 / phi - 1.0) * (_T_CR - ts)
+        tf = _bisect(_R_TF_REGION_II_III, ta, pa, rs, ts_bar, ta, ts_bar, _TOL)
+        rf = _ra_bar(tf, ta) * (ts_bar - tf) / (tf - ta)
+    else:  # region IV,V,VI
+        rf = 0.0
+        flux3 = (
+            q_minus_qv
+            - (_T_CR - ta) / _ra_un(_T_CR, ta)
+            - (_PHI_SALT * _pv_star(_T_CR) - pa) / _ZA_UN
+        )
+        if flux3 < 0.0:  # region IV,V
+            ts = _bisect(_R_TS_REGION_IV_V, ta, pa, 0.0, 0.0, 0.0, _T_CR, _TOL)
+            rs = (_T_CR - ts) / q_minus_qv
+            eq_var_code = _EQ_RS
+            ps = _P_CR - (_P_CR - pa) * _zs(rs) / (_zs(rs) + _ZA_UN)
+            if ps > _PHI_SALT * _pv_star(ts):  # region V
+                ts = _bisect(_R_TS_REGION_V, ta, pa, 0.0, 0.0, 0.0, _T_CR, _TOL)
+                rs = (_T_CR - ts) / q_minus_qv
+                eq_var_code = _EQ_RS
+        else:  # region VI
+            rs = 0.0
+            eq_var_code = _EQ_DTCDT
+            d_tc_dt = (1.0 / _HC_CORE) * flux3
+
+    return eq_var_code, phi, rf, rs, d_tc_dt
+
+
+@njit(cache=True)
+def _residual(kind, x, p0, p1, p2, p3):
+    if kind == _R_TS:  # x=ts, p0=ta, p1=pa, p2=rs
+        ta, pa, rs = p0, p1, p2
+        return (x - ta) / _ra(x, ta) + (_P_CR - pa) / (_zs(rs) + _ZA) - (_T_CR - x) / rs
+    if kind == _R_TF:  # x=tf, p0=ta, p1=pa, p2=rs
+        ta, pa, rs = p0, p1, p2
         return (
-            eta * q * (cpa * (t_cr - ta) + lat_heat * rgasa / (p * rgasv) * (p_cr - pa))
+            (x - ta) / _ra_bar(x, ta)
+            + (_P_CR - pa) / (_zs(rs) + _ZA_BAR)
+            - (_T_CR - x) / rs
         )
-
-    def zs(rs):  # mass transfer resistance through skin, Pa m^2/W
-        return 52.1 if rs == 0.0387 else 6.0e8 * rs**5
-
-    def ra(
-        ts,
-        ta,
-    ):  # heat transfer resistance through air, exposed part of skin, K m^2/W
-        hc = 17.4
-        phi_rad = 0.85
-        hr = epsilon * phi_rad * sigma * (ts**2 + ta**2) * (ts + ta)
-        return 1.0 / (hc + hr)
-
-    def ra_bar(
-        tf,
-        ta,
-    ):  # heat transfer resistance through air, clothed part of skin, K m^2/W
-        hc = 11.6
-        phi_rad = 0.79
-        hr = epsilon * phi_rad * sigma * (tf**2 + ta**2) * (tf + ta)
-        return 1.0 / (hc + hr)
-
-    def ra_un(
-        ts,
-        ta,
-    ):  # heat transfer resistance through air, when being naked, K m^2/W
-        hc = 12.3
-        phi_rad = 0.80
-        hr = epsilon * phi_rad * sigma * (ts**2 + ta**2) * (ts + ta)
-        return 1.0 / (hc + hr)
-
-    # Given air temperature and relative humidity, returns the equivalent variables
-    def find_eq_var(ta, _rh):
-        pa = _rh * pv_star(ta)  # air vapor pressure
-        rs = 0.0387  # m^2K/W, heat transfer resistance through skin
-        phi = 0.84  # covering fraction
-        d_tc_dt = 0.0  # K/s, rate of change in Tc
-        m = (p_cr - pa) / (zs(rs) + za)
-        m_bar = (p_cr - pa) / (zs(rs) + za_bar)
-        ts = solve(
-            lambda ts: (
-                (ts - ta) / ra(ts, ta) + (p_cr - pa) / (zs(rs) + za) - (t_cr - ts) / rs
-            ),
-            max(0.0, min(t_cr, ta) - rs * abs(m)),
-            max(t_cr, ta) + rs * abs(m),
-            tol,
-            max_iter,
+    if kind == _R_TF_REGION_II_III:  # x=tf, p0=ta, p1=pa, p2=rs, p3=ts_bar
+        ta, pa, rs, ts_bar = p0, p1, p2, p3
+        return (
+            (x - ta) / _ra_bar(x, ta)
+            + (_P_CR - pa)
+            * (x - ta)
+            / ((_zs(rs) + _ZA_BAR) * (x - ta) + _R * _ra_bar(x, ta) * (ts_bar - x))
+            - (_T_CR - ts_bar) / rs
         )
-        tf = solve(
-            lambda tf: (
-                (tf - ta) / ra_bar(tf, ta)
-                + (p_cr - pa) / (zs(rs) + za_bar)
-                - (t_cr - tf) / rs
-            ),
-            max(0.0, min(t_cr, ta) - rs * abs(m_bar)),
-            max(t_cr, ta) + rs * abs(m_bar),
-            tol,
-            max_iter,
+    if kind == _R_TS_REGION_IV_V:  # x=ts, p0=ta, p1=pa
+        ta, pa = p0, p1
+        q_minus_qv = _Q - _qv(ta, pa)
+        return (
+            (x - ta) / _ra_un(x, ta)
+            + (_P_CR - pa) / (_zs((_T_CR - x) / q_minus_qv) + _ZA_UN)
+            - q_minus_qv
         )
-        flux1 = (
-            q - qv(ta, pa) - (1.0 - phi) * (t_cr - ts) / rs
-        )  # C*dTc/dt when rf=Zf=\inf
-        flux2 = (
-            q - qv(ta, pa) - (1.0 - phi) * (t_cr - ts) / rs - phi * (t_cr - tf) / rs
-        )  # C*dTc/dt when rf=Zf=0
-        if flux1 <= 0.0:  # region I
-            eq_var_name = "phi"
-            phi = 1.0 - (q - qv(ta, pa)) * rs / (t_cr - ts)
-            rf = float("inf")
-        elif flux2 <= 0.0:  # region II&III
-            eq_var_name = "rf"
-            ts_bar = (
-                t_cr - (q - qv(ta, pa)) * rs / phi + (1.0 / phi - 1.0) * (t_cr - ts)
-            )
-            tf = solve(
-                lambda tf: (
-                    (tf - ta) / ra_bar(tf, ta)
-                    + (p_cr - pa)
-                    * (tf - ta)
-                    / (
-                        (zs(rs) + za_bar) * (tf - ta)
-                        + r * ra_bar(tf, ta) * (ts_bar - tf)
-                    )
-                    - (t_cr - ts_bar) / rs
-                ),
-                ta,
-                ts_bar,
-                tol,
-                max_iter,
-            )
-            rf = ra_bar(tf, ta) * (ts_bar - tf) / (tf - ta)
-        else:  # region IV,V,VI
-            rf = 0.0
-            flux3 = (
-                q
-                - qv(ta, pa)
-                - (t_cr - ta) / ra_un(t_cr, ta)
-                - (phi_salt * pv_star(t_cr) - pa) / za_un
-            )
-            if flux3 < 0.0:  # region IV,V
-                ts = solve(
-                    lambda ts: (
-                        (ts - ta) / ra_un(ts, ta)
-                        + (p_cr - pa) / (zs((t_cr - ts) / (q - qv(ta, pa))) + za_un)
-                        - (q - qv(ta, pa))
-                    ),
-                    0.0,
-                    t_cr,
-                    tol,
-                    max_iter,
-                )
-                rs = (t_cr - ts) / (q - qv(ta, pa))
-                eq_var_name = "rs"
-                ps = p_cr - (p_cr - pa) * zs(rs) / (zs(rs) + za_un)
-                if ps > phi_salt * pv_star(ts):  # region V
-                    ts = solve(
-                        lambda ts: (
-                            (ts - ta) / ra_un(ts, ta)
-                            + (phi_salt * pv_star(ts) - pa) / za_un
-                            - (q - qv(ta, pa))
-                        ),
-                        0.0,
-                        t_cr,
-                        tol,
-                        max_iter,
-                    )
-                    rs = (t_cr - ts) / (q - qv(ta, pa))
-                    eq_var_name = "rs*"
-            else:  # region VI
-                rs = 0.0
-                eq_var_name = "d_tc_dt"
-                d_tc_dt = (1.0 / hc_core) * flux3
-        return [eq_var_name, phi, rf, rs, d_tc_dt]
+    if kind == _R_TS_REGION_V:  # x=ts, p0=ta, p1=pa
+        ta, pa = p0, p1
+        q_minus_qv = _Q - _qv(ta, pa)
+        return (
+            (x - ta) / _ra_un(x, ta)
+            + (_PHI_SALT * _pv_star(x) - pa) / _ZA_UN
+            - q_minus_qv
+        )
+    if kind == _R_T_PHI:  # x=t, p0=eq_var
+        _, phi, _, _, _ = _find_eq_var(x, 1.0)
+        return phi - p0
+    if kind == _R_T_RF:  # x=t, p0=eq_var
+        rh_trial = min(1.0, _PA0 / _pv_star(x))
+        _, _, rf, _, _ = _find_eq_var(x, rh_trial)
+        return rf - p0
+    if kind == _R_T_RS:  # x=t, p0=eq_var
+        rh_trial = _PA0 / _pv_star(x)
+        _, _, _, rs, _ = _find_eq_var(x, rh_trial)
+        return rs - p0
+    # kind == _R_T_DTCDT: x=t, p0=eq_var
+    rh_trial = _PA0 / _pv_star(x)
+    _, _, _, _, d_tc_dt = _find_eq_var(x, rh_trial)
+    return d_tc_dt - p0
 
-    # given the equivalent variable, find the Heat Index
-    def find_t(eq_var_name, eq_var):
-        if eq_var_name == "phi":
-            t = solve(
-                lambda t: find_eq_var(t, 1.0)[1] - eq_var,
-                0.0,
-                240.0,
-                tol_t,
-                max_iter,
-            )
-            _region = "I"
-        elif eq_var_name == "rf":
-            t = solve(
-                lambda t: find_eq_var(t, min(1.0, pa0 / pv_star(t)))[2] - eq_var,
-                230.0,
-                300.0,
-                tol_t,
-                max_iter,
-            )
-            _region = "II" if pa0 > pv_star(t) else "III"
-        elif eq_var_name == "rs" or eq_var_name == "rs*":
-            t = solve(
-                lambda T: find_eq_var(T, pa0 / pv_star(T))[3] - eq_var,
-                295.0,
-                350.0,
-                tol_t,
-                max_iter,
-            )
-            _region = "IV" if eq_var_name == "rs" else "V"
+
+@njit(cache=True)
+def _bisect(kind, p0, p1, p2, p3, x1, x2, tol):
+    a = x1
+    b = x2
+    fa = _residual(kind, a, p0, p1, p2, p3)
+    fb = _residual(kind, b, p0, p1, p2, p3)
+    if fa * fb > 0.0:
+        raise ValueError("wrong initial interval in the root solver")
+    c = b
+    for i in range(_MAX_ITER):
+        c = (a + b) / 2.0
+        fc = _residual(kind, c, p0, p1, p2, p3)
+        if fb * fc > 0.0:
+            b = c
+            fb = fc
         else:
-            t = solve(
-                lambda T: find_eq_var(T, pa0 / pv_star(T))[4] - eq_var,
-                340.0,
-                1000.0,
-                tol_t,
-                max_iter,
-            )
-            _region = "VI"
-        return t, _region
+            a = c
+        if abs(a - b) < tol:
+            return c
+        if i == _MAX_ITER - 1:
+            raise ValueError("reaching maximum iteration in the root solver")
+    return c
 
-    def solve(f, x1, x2, _tol, _max_iter):
-        a = x1
-        b = x2
-        fa = f(a)
-        fb = f(b)
-        if fa * fb > 0.0:
-            raise SystemExit("wrong initial interval in the root solver")
-        for i in range(_max_iter):
-            c = (a + b) / 2.0
-            fc = f(c)
-            if fb * fc > 0.0:
-                b = c
-                fb = fc
-            else:
-                a = c
-            if abs(a - b) < _tol:
-                return c
-            if i == _max_iter - 1:
-                raise SystemExit("reaching maximum iteration in the root solver")
 
-    dic = {"phi": 1, "rf": 2, "rs": 3, "rs*": 3, "d_tc_dt": 4}
-    eq_vars = find_eq_var(tdb, rh)
-    hi, region = find_t(eq_vars[0], eq_vars[dic[eq_vars[0]]])
+@njit(cache=True)
+def _find_t(eq_var_code, eq_var):
+    if eq_var_code == _EQ_PHI:
+        return _bisect(_R_T_PHI, eq_var, 0.0, 0.0, 0.0, 0.0, 240.0, _TOL_T)
+    if eq_var_code == _EQ_RF:
+        return _bisect(_R_T_RF, eq_var, 0.0, 0.0, 0.0, 230.0, 300.0, _TOL_T)
+    if eq_var_code == _EQ_RS:
+        return _bisect(_R_T_RS, eq_var, 0.0, 0.0, 0.0, 295.0, 350.0, _TOL_T)
+    return _bisect(_R_T_DTCDT, eq_var, 0.0, 0.0, 0.0, 340.0, 1000.0, _TOL_T)
+
+
+@vectorize(
+    [
+        float64(float64, float64),
+    ],
+    cache=True,
+)
+def _lu_heat_index_optimized(tdb: float64, rh: float64) -> float64:
+    # combining the two functions find_eq_var and find_t
+    eq_var_code, phi, rf, rs, d_tc_dt = _find_eq_var(tdb, rh)
+    if eq_var_code == _EQ_PHI:
+        eq_var = phi
+    elif eq_var_code == _EQ_RF:
+        eq_var = rf
+    elif eq_var_code == _EQ_RS:
+        eq_var = rs
+    else:
+        eq_var = d_tc_dt
+    hi = _find_t(eq_var_code, eq_var)
     if tdb == 0.0:
         hi = 0.0
     return hi

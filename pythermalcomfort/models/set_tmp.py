@@ -2,26 +2,25 @@ from __future__ import annotations
 
 import numpy as np
 
-from pythermalcomfort.classes_input import SETInputs
+from pythermalcomfort.classes_input import NumericInput, SETInputs
 from pythermalcomfort.classes_return import SET
 from pythermalcomfort.models.two_nodes_gagge import two_nodes_gagge
 from pythermalcomfort.utilities import (
-    Models,
     Postures,
-    _check_standard_compliance_array,
+    _check_ashrae55_compliance,
 )
 
 
 def set_tmp(
-    tdb: float | list[float],
-    tr: float | list[float],
-    v: float | list[float],
-    rh: float | list[float],
-    met: float | list[float],
-    clo: float | list[float],
-    wme: float | list[float] = 0.0,
-    body_surface_area: float | list[float] = 1.8258,
-    p_atm: float | list[float] = 101325,
+    tdb: NumericInput,
+    tr: NumericInput,
+    v: NumericInput,
+    rh: NumericInput,
+    met: NumericInput,
+    clo: NumericInput,
+    wme: NumericInput = 0.0,
+    body_surface_area: NumericInput = 1.8258,
+    p_atm: NumericInput = 101325,
     position: str = Postures.standing.value,
     limit_inputs: bool = True,
     round_output: bool = True,
@@ -137,8 +136,7 @@ def set_tmp(
             v_valid,
             met_valid,
             clo_valid,
-        ) = _check_standard_compliance_array(
-            standard=Models.ashrae_55_2023.value,
+        ) = _check_ashrae55_compliance(
             tdb=tdb,
             tr=tr,
             v=v,

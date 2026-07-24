@@ -4,7 +4,155 @@ Changelog
 Unreleased
 ----------
 
-* Added `ireq` model to calculate Required Clothing Insulation (IREQ) and Duration Limited Exposure (DLE) based on ISO 11079.
+* Added ``ireq`` model to calculate Required Clothing Insulation (IREQ) and
+  Duration Limited Exposure (DLE) based on ISO 11079.
+
+4.3.0 (2026-07-24)
+------------------
+
+* Added ``SummaryPlot.set_categories()`` for summarizing an already-classified
+  per-row category array — e.g. adaptive comfort's per-row acceptability
+  bands, which can't be reduced to one continuous column plus fixed
+  thresholds the way ``set_regions()`` handles PMV/UTCI-style outputs. See
+  the ``set_categories()`` docstring for an ``np.select``-based recipe.
+
+4.2.0 (2026-07-24)
+------------------
+
+* Added a ``pa`` (water vapour partial pressure) applicability check to
+  ``pmv_ppd_iso``, per the ISO 7730 Clause 4 limit of 0 Pa to 2 700 Pa. Inputs
+  outside this range (e.g. ``tdb=30``, ``rh=100`` gives ``pa`` ~4 243 Pa) now
+  return ``nan`` instead of a value outside the standard's applicability.
+* Fixed ``clo_dynamic_iso`` to estimate walking speed using the ISO 7730
+  Annex C / ISO 9920 formula for undefined walking speed
+  (``v_walk = 0.0052 * (met * 58.15 - 58)``, clipped to 0-0.7 m/s) instead of
+  reusing ``v_relative``'s activity-generated-air-speed formula, which is a
+  distinct formula intended for the whole-body PMV heat balance rather than
+  the clothing dynamic insulation correction.
+* Corrected the initial guess for clothing surface temperature in
+  ``pmv_ppd_iso`` to match the corrected Annex D formula in ISO 7730:2025
+  (``3.5 * (6.45 * icl + 0.1)``, missing the ``6.45 *`` factor present in the
+  ISO 7730:2005 Annex D listing). This only affects the starting point of the
+  iterative solver and does not change any output value.
+* Added ``"7730-2025"`` as a supported ``model`` value for ``pmv_ppd_iso``
+  and made it the default, since ISO 7730:2025 is now the current edition of
+  the standard. ``"7730-2005"`` remains supported for backwards
+  compatibility; both currently return identical results since the PMV/PPD
+  formulae are unchanged between editions.
+
+4.1.1 (2026-07-20)
+------------------
+
+* Sped up ``cooling_effect`` (~10x) by calling the already numba-jitted Gagge
+  two-node kernel directly instead of the full ``set_tmp()`` public API on
+  every root-finding iteration.
+* Sped up ``solar_gain`` (~100x+) with numba: table-based interpolation and
+  posture handling converted to JIT-compiled code.
+* Pinned ``pillow>=10.3.0`` in docs requirements to resolve a transitive
+  Snyk-flagged vulnerability.
+* Reduced the ``build-test-publish-testPyPI.yml`` CI matrix to speed up
+  TestPyPI release checks.
+
+4.1.0 (2026-07-20)
+------------------
+
+* Added ``heat_index_schoen``, the Temperature-Humidity Index (THI) heat
+  index model in accordance with Schoen (2005).
+* Sped up ``heat_index_rothfusz``, ``heat_index_schoen``, and
+  ``heat_index_lu`` with numba JIT compilation. ``heat_index_lu`` (an
+  iterative root-solver) sees the largest gain, roughly 29x faster.
+
+4.0.3 (2026-07-20)
+------------------
+
+* Added a ``Sports.CROQUET`` preset to ``sports_heat_stress_risk``
+  (``clo=0.7, met=4.5, vr=0.5, duration=90``).
+* Fixed the extreme-risk interpolation segment so it reaches a risk level of
+  4.9 exactly 5 °C above the extreme threshold, instead of reaching it early
+  at +4.5 °C and leaving the last 0.5 °C of the range dead.
+* Fixed an inconsistency in ``sports_heat_stress_risk``'s extreme-risk
+  interpolation: the upper anchor temperature used internally to scale the
+  risk level was the raw, unrounded solver output, while the ``t_extreme``
+  value returned to callers is rounded to one decimal. This could produce a
+  risk level inconsistent with the documented/returned thresholds. The
+  interpolation now uses the same rounded ``t_extreme`` that is returned.
+
+4.0.2 (2026-06-23)
+------------------
+
+* Improved sports heat stress risk interpolation within the extreme range: the
+  upper anchor temperature (where risk reaches 4.9) is now computed dynamically
+  as ``t_extreme + 5 °C``. This makes the extreme-range scale consistent across
+  humidity conditions — the risk always spans exactly 5 °C above the
+  humidity-dependent extreme threshold regardless of ambient conditions.
+
+4.0.1 (2026-06-17)
+------------------
+
+* Added Python 3.14 support. Removed ``pytest-travis-fold`` (unmaintained,
+  incompatible with Python 3.14) and lifted the ``pytest<7`` cap.
+* Fixed duplicate parametrize IDs in the ridge-regression test suite,
+  which pytest 9 now rejects (``ast.Str`` was removed in Python 3.14).
+
+4.0.0 (2026-06-16)
+------------------
+
+.. note::
+    Version 4.0.0 introduces a new **Matplotlib plotting API** under
+    ``pythermalcomfort.plots.matplotlib``. All four plot classes follow a
+    fluent builder pattern — chain setter calls and finish with ``.plot()``
+    to receive standard Matplotlib ``Figure`` / ``Axes`` handles for full
+    customisation.
+
+**New plotting module** (``pythermalcomfort.plots.matplotlib``)
+
+* ``ThresholdPlot`` — shade comfort/stress regions on any two-axis chart
+  (e.g. operative temperature vs. relative humidity, temperature vs. air
+  speed). Configure regions via ``set_regions(thresholds, labels, colors)``.
+* ``SummaryPlot`` — horizontal or vertical bar-summary chart built from a
+  ``pandas.DataFrame``; useful for comparing multiple spaces or scenarios at
+  a glance.
+* ``AdaptivePlot`` — ready-made adaptive comfort chart for ASHRAE 55 and
+  EN 16798, with configurable comfort bands.
+* ``PsychrometricPlot`` — psychrometric chart with overlaid comfort regions.
+
+All classes share a common ``BasePlot`` base and centralised visual defaults
+(``_shared.py``), making it easy to apply a consistent house style.
+
+**Other changes**
+
+* Refactored type hints across model function signatures to use a
+  ``NumericInput`` alias (``float | int | np.floating | np.integer``),
+  improving IDE auto-complete and static-analysis accuracy.
+* Added ``hr_to_rh`` utility for humidity-ratio → relative-humidity
+  conversion.
+* Minor cooling-effect calculation streamlining and constant centralisation.
+
+3.9.8 (2026-05-25)
+------------------
+
+* Added optional ``round_output`` parameter to ``adaptive_ashrae`` and ``adaptive_en``
+  to control rounding of output values.
+* Added ``limit_inputs`` parameter to ``ankle_draft`` and ``vertical_tmp_grad_ppd``,
+  consistent with other model functions.
+* ``ankle_draft`` and ``vertical_tmp_grad_ppd`` now raise ``UserWarning`` when inputs
+  exceed model applicability limits.
+* Fixed ``compliance`` attribute being included in non-ASHRAE PMV model outputs;
+  it is now only returned by ``pmv_ppd_ashrae``.
+* Fixed UTCI stress category mapping when ``units="IP"``; categories were
+  incorrectly mapped before IP unit conversion.
+
+3.9.3 (2026-05-01)
+------------------
+
+* Maintenance release: internal CI pipeline improvements and dependency updates.
+  No user-facing changes.
+
+3.9.2 (2026-04-14)
+------------------
+
+* Updated `sports_heat_stress_risk` so `risk_level_interpolated` now uses `1.0-4.0` instead of `0.0-3.0`.
+* Updated `sports_heat_stress_risk` to enforce the sport-specific minimum air speed (`sport.vr`).
 
 3.9.1 (2026-02-25)
 ------------------

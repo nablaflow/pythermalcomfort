@@ -30,7 +30,7 @@ def read(*names: str, encoding: str = "utf8") -> str:
 
 setup(
     name="pythermalcomfort",
-    version="3.9.1",
+    version="4.3.0",
     license="MIT",
     description=(
         "pythermalcomfort is a comprehensive toolkit for calculating "
@@ -50,7 +50,7 @@ setup(
     long_description_content_type="text/x-rst",
     author="Federico Tartarini",
     author_email="cbecomforttool@gmail.com",
-    url="https://github.com/CenterForTheBuiltEnvironment/pythermalcomfort",
+    url="https://github.com/pythermalcomfort/pythermalcomfort",
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
@@ -69,6 +69,7 @@ setup(
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: Implementation :: PyPy",
         "Topic :: Education",
@@ -80,7 +81,7 @@ setup(
         "Documentation": "https://pythermalcomfort.readthedocs.io/",
         "Changelog": "https://pythermalcomfort.readthedocs.io/en/latest/changelog.html",
         "Issue Tracker": (
-            "https://github.com/CenterForTheBuiltEnvironment/pythermalcomfort/issues"
+            "https://github.com/pythermalcomfort/pythermalcomfort/issues"
         ),
     },
     keywords=[
@@ -105,7 +106,16 @@ setup(
         "setuptools",
     ],
     extras_require={
-        "dev": ["pytest", "sphinx"],
+        "dev": [
+            "pytest",
+            "sphinx",
+            "ruff",
+            "docformatter",
+            "matplotlib>=3.8",
+            "pandas",
+            "seaborn>=0.13",
+        ],
+        "plots": ["matplotlib>=3.8", "pandas", "seaborn>=0.13"],
     },
     entry_points={
         "console_scripts": [

@@ -11,7 +11,7 @@ Bug, Feature, Discussions, and Documentation Issues
 Bug Reports
 -----------
 
-When `reporting a bug <https://github.com/CenterForTheBuiltEnvironment/pythermalcomfort/issues>`_, please complete
+When `reporting a bug <https://github.com/pythermalcomfort/pythermalcomfort/issues>`_, please complete
 the issue template with as much relevant information as possible, including:
 
 * Your operating system name and version.
@@ -31,8 +31,8 @@ located in the `docs/` folder.
 Features, Feedback, and Discussions
 -----------------------------------
 
-The best way to suggest a new feature is to open an `issue <https://github.com/CenterForTheBuiltEnvironment/pythermalcomfort/issues>`_.
-Alternatively, you can start a discussion in the `Discussions section <https://github.com/CenterForTheBuiltEnvironment/pythermalcomfort/discussions>`_.
+The best way to suggest a new feature is to open an `issue <https://github.com/pythermalcomfort/pythermalcomfort/issues>`_.
+Alternatively, you can start a discussion in the `Discussions section <https://github.com/pythermalcomfort/pythermalcomfort/discussions>`_.
 
 If you are proposing a feature, please use the `Feature request` template and:
 
@@ -56,8 +56,9 @@ Setting up your development environment:
 
     git clone git@github.com:your-username/pythermalcomfort.git
     cd pythermalcomfort
-    git remote add upstream git@github.com:CenterForTheBuiltEnvironment/pythermalcomfort.git
+    git remote add upstream git@github.com:pythermalcomfort/pythermalcomfort.git
     git fetch upstream
+    git checkout development
 
 2. Set up a virtual environment and install dependencies, you should have Python 3.12+ installed and `pipenv <https://pipenv.pypa.io/en/latest/>`_ available:
 
@@ -66,7 +67,7 @@ Setting up your development environment:
     pip install pipenv
     pipenv sync --dev
 
-3. Create a feature branch (use the naming rules below):
+3. Create a feature branch based on the development branch, with a descriptive name for example:
 
 .. code-block:: bash
 
@@ -145,6 +146,7 @@ Quick checklist (use before opening a PR)
 - [ ] All tests pass and formatting/linting applied.
 - [ ] Add the function to ``__init__.py`` which is located in the ``pythermalcomfort/models/`` folder.
 - [ ] The function should accept both scalar and vectorized inputs (lists, numpy arrays) and return outputs of matching shape.
+- [ ] Optional but important: optimise for performance using Numba and NumPy vectorized operations.
 
 Step-by-step guide
 ------------------
@@ -277,6 +279,23 @@ As a convention, functions should return structured dataclasses where applicable
 - Add a short line to the changelog describing the new function.
 - Optionally add yourself to AUTHORS.rst when contributing a new feature.
 
+Release process (maintainers only)
+===================================
+
+After each release, the version-bump commit on ``master`` must be merged back
+into ``development`` so the two branches stay in sync:
+
+.. code-block:: bash
+
+    git checkout development && git pull
+    git merge origin/master --no-edit
+    git push origin development
+
+Failing to do this means ``development`` will be behind ``master`` and the next
+RC tag will be rejected by the CI ``merge-base`` check.
+
+See ``CLAUDE.md`` for the full step-by-step release process.
+
 8) Formatting, linting and tests locally
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -328,6 +347,6 @@ Where to get help
   `Full documentation <https://pythermalcomfort.readthedocs.io/en/latest>`_
 
 License
-=======
+-------
 
 pythermalcomfort is released under the MIT License.

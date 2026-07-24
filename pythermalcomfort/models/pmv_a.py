@@ -4,21 +4,21 @@ from typing import Literal
 
 import numpy as np
 
-from pythermalcomfort.classes_input import APMVInputs
+from pythermalcomfort.classes_input import APMVInputs, NumericInput
 from pythermalcomfort.classes_return import APMV
 from pythermalcomfort.models.pmv_ppd_iso import pmv_ppd_iso
 from pythermalcomfort.utilities import Models, Units
 
 
 def pmv_a(
-    tdb: float | list[float],
-    tr: float | list[float],
-    vr: float | list[float],
-    rh: float | list[float],
-    met: float | list[float],
-    clo: float | list[float],
+    tdb: NumericInput,
+    tr: NumericInput,
+    vr: NumericInput,
+    rh: NumericInput,
+    met: NumericInput,
+    clo: NumericInput,
     a_coefficient: float,
-    wme: float | list[float] = 0,
+    wme: NumericInput = 0,
     units: Literal["SI", "IP"] = Units.SI.value,
     limit_inputs: bool = True,
 ) -> APMV:
@@ -61,8 +61,8 @@ def pmv_a(
         If True, returns nan for inputs outside standard limits. Defaults to True.
 
         .. note::
-            ISO 7730 2005 limits: 10 < tdb [°C] < 30, 10 < tr [°C] < 40, 0 < vr [m/s] < 1, 0.8 < met [met] < 4,
-            0 < clo [clo] < 2, -2 < PMV < 2.
+            ISO 7730 [7730ISO2005]_ [7730ISO2025]_ limits: 10 < tdb [°C] < 30, 10 < tr [°C] < 40, 0 < vr [m/s] < 1,
+            0.8 < met [met] < 4, 0 < clo [clo] < 2, 0 < pa [Pa] < 2700, -2 < PMV < 2.
 
     Returns
     -------
@@ -123,7 +123,7 @@ def pmv_a(
         met,
         clo,
         wme,
-        model=Models.iso_7730_2005.value,
+        model=Models.iso_7730_2025.value,
         units=units,
         limit_inputs=limit_inputs,
     ).pmv

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.optimize import brentq
 
-from pythermalcomfort.classes_input import SportsHeatStressInputs
+from pythermalcomfort.classes_input import NumericInput, SportsHeatStressInputs
 from pythermalcomfort.classes_return import SportsHeatStressRisk
 from pythermalcomfort.models import phs
 from pythermalcomfort.utilities import validate_type
@@ -45,9 +45,9 @@ class _SportsValues:
 class Sports:
     """Namespace of predefined sport values.
 
-    Use attributes like `Sports.RUNNING` to obtain a `_SportsValues` instance.
-    This class uses a frozen dataclass decorator to prevent modification of the
-    namespace. Attributes are class-level constants, not instance fields.
+    Use attributes like `Sports.RUNNING` to obtain a `_SportsValues` instance. This
+    class uses a frozen dataclass decorator to prevent modification of the namespace.
+    Attributes are class-level constants, not instance fields.
     """
 
     ABSEILING = _SportsValues(clo=0.6, met=6.0, vr=0.5, duration=120)
@@ -58,6 +58,7 @@ class Sports:
     BOWLS = _SportsValues(clo=0.5, met=5.0, vr=0.5, duration=180)
     CANOEING = _SportsValues(clo=0.6, met=7.5, vr=2.0, duration=60)
     CRICKET = _SportsValues(clo=0.7, met=6.0, vr=0.75, duration=120)
+    CROQUET = _SportsValues(clo=0.7, met=4.5, vr=0.5, duration=90)
     CYCLING = _SportsValues(clo=0.4, met=7.0, vr=3.0, duration=60)
     EQUESTRIAN = _SportsValues(clo=0.9, met=7.4, vr=3.0, duration=60)
     FIELD_ATHLETICS = _SportsValues(clo=0.3, met=7.0, vr=1.0, duration=60)
@@ -86,10 +87,10 @@ class Sports:
 
 
 def sports_heat_stress_risk(
-    tdb: float | list[float] | np.ndarray,
-    tr: float | list[float] | np.ndarray,
-    rh: float | list[float] | np.ndarray,
-    vr: float | list[float] | np.ndarray,
+    tdb: NumericInput | np.ndarray,
+    tr: NumericInput | np.ndarray,
+    rh: NumericInput | np.ndarray,
+    vr: NumericInput | np.ndarray,
     sport: _SportsValues,
 ) -> SportsHeatStressRisk:
     """Calculate sports heat stress risk levels based on environmental conditions and
@@ -112,12 +113,15 @@ def sports_heat_stress_risk(
     rh : float or list of float
         Relative humidity [%].
     vr : float or list of float
-        Relative air speed [m/s].
+        Relative air speed [m/s]. Relative air speed [m/s]. If the input ``vr``
+        is lower than the minimum relative air speed defined for the selected
+        sport (``sport.vr``), then ``sport.vr`` will be used for the calculation.
     sport : _SportsValues
         Sport-specific activity dataclass with fields ``clo`` (clothing insulation),
-        ``met`` (metabolic rate), ``vr`` (relative air speed), and ``duration`` (activity duration).
-        Use one of the predefined entries from the :py:class:`Sports` class, e.g., ``Sports.RUNNING``,
-        ``Sports.SOCCER``, ``Sports.TENNIS``, etc.
+        ``met`` (metabolic rate), ``vr`` (minimum relative air speed),
+        and ``duration`` (activity duration). Use one of the predefined entries from
+        the :py:class:`Sports` class, e.g., ``Sports.RUNNING``, ``Sports.SOCCER``,
+        ``Sports.TENNIS``, etc.
 
     Returns
     -------
@@ -146,27 +150,38 @@ def sports_heat_stress_risk(
 
         # Example 1: Single condition for running
         result = sports_heat_stress_risk(
-            tdb=35, tr=35, rh=40, vr=0.1, sport=Sports.RUNNING
+            tdb=35, tr=35, rh=40, vr=2.0, sport=Sports.RUNNING
         )
-        print(result.risk_level_interpolated)  # 3.0 (Extreme risk)
-        print(result.t_medium)  # 23.0 (Temperature threshold for medium risk)
-        print(result.t_high)  # 25.0 (Temperature threshold for high risk)
-        print(result.t_extreme)  # 28.6 (Temperature threshold for extreme risk)
-        print(result.recommendation)  # "Consider suspending play"
+        print(result.risk_level_interpolated)  # 2.1 (Medium risk)
+        print(result.t_medium)  # 34.5 (Temperature threshold for medium risk)
+        print(result.t_high)  # 39.0 (Temperature threshold for high risk)
+        print(result.t_extreme)  # 41.6 (Temperature threshold for extreme risk)
+        print(
+            result.recommendation
+        )  # "Increase frequency and/or duration of rest breaks"
 
         # Example 2: Array inputs for multiple conditions
         result = sports_heat_stress_risk(
             tdb=[30, 35, 40],
             tr=[30, 35, 40],
             rh=[50, 50, 50],
-            vr=[0.5, 0.5, 0.5],
+            vr=[1.0, 1.0, 1.5],
             sport=Sports.SOCCER,
         )
         print(result.risk_level_interpolated)  # Array of risk levels
 
-        # Example 3: Different sports
+        # Example 3: vr clamping — input vr (0.5 m/s) is below Sports.RUNNING.vr
+        # (2.0 m/s), so the calculation uses sport.vr=2.0 m/s as the effective wind speed.
+        result_clamped = sports_heat_stress_risk(
+            tdb=35, tr=35, rh=40, vr=0.5, sport=Sports.RUNNING
+        )
+        # Because vr is clamped to 2.0 m/s (same as Example 1), the output matches:
+        print(result_clamped.risk_level_interpolated)  # same as Example 1
+        print(result_clamped.t_medium)  # same as Example 1
+
+        # Example 4: Different sports
         result_tennis = sports_heat_stress_risk(
-            tdb=33, tr=70, rh=60, vr=0.1, sport=Sports.TENNIS
+            tdb=33, tr=70, rh=60, vr=0.75, sport=Sports.TENNIS
         )
         result_cycling = sports_heat_stress_risk(
             tdb=33, tr=70, rh=60, vr=3.0, sport=Sports.CYCLING
@@ -181,6 +196,7 @@ def sports_heat_stress_risk(
     tr = np.asarray(inputs.tr, dtype=float)
     rh = np.asarray(inputs.rh, dtype=float)
     vr = np.asarray(inputs.vr, dtype=float)
+    vr_effective = np.maximum(vr, sport.vr)
 
     # Vectorize the calculation function to handle arrays
     # Returns (risk_level_interpolated, t_medium, t_high, t_extreme, recommendation) for each input
@@ -188,7 +204,7 @@ def sports_heat_stress_risk(
         _calc_risk_single_value, otypes=[float, float, float, float, str]
     )
     risk_levels, t_mediums, t_highs, t_extremes, recommendations = vectorized_calc(
-        tdb=tdb, tr=tr, rh=rh, vr=vr, sport=sport
+        tdb=tdb, tr=tr, rh=rh, vr=vr_effective, sport=sport
     )
 
     return SportsHeatStressRisk(
@@ -229,6 +245,8 @@ def _calc_risk_single_value(
     max_t_low = 34.5  # maximum tdb for low risk
     max_t_medium = 39  # maximum tdb for medium risk
     max_t_high = 43.5  # maximum tdb for high risk
+    # risk 4.9 is reached exactly 5°C above the humidity-dependent extreme threshold
+    t_upper_extreme_delta = 5.0
     min_t_low = 21  # minimum tdb for low risk
     min_t_medium = 23  # minimum tdb for medium risk
     min_t_high = 25  # minimum tdb for high risk
@@ -237,22 +255,13 @@ def _calc_risk_single_value(
     t_cr_extreme = 40  # core temperature for extreme risk
 
     if tdb < min_t_medium:
-        # Low risk - use default thresholds and risk level 0
+        # Low risk - use default thresholds and risk level 1
         return (
-            0.0,
+            1.0,
             min_t_medium,
             min_t_high,
             min_t_extreme,
-            _get_recommendation(0.0),
-        )
-    if tdb > max_t_high:
-        # Extreme risk - use maximum thresholds and risk level 3
-        return (
-            3.0,
-            max_t_low,
-            max_t_medium,
-            max_t_high,
-            _get_recommendation(3.0),
+            _get_recommendation(1.0),
         )
 
     def calculate_threshold_water_loss(x):
@@ -344,22 +353,30 @@ def _calc_risk_single_value(
     if t_medium < min_t_medium:
         t_medium = min_t_medium
 
+    extreme_entry_t = min(round(t_extreme, 1), max_t_high)
     risk_level_interpolated = np.nan
     # calculate the risk level with one decimal place
     if min_t_low <= tdb < t_medium:
-        risk_level_interpolated = (tdb - min_t_medium) / (t_medium - min_t_medium)
+        risk_level_interpolated = 1.0 + (tdb - min_t_medium) / (t_medium - min_t_medium)
     elif t_medium <= tdb < t_high:
-        risk_level_interpolated = 1.0 + (tdb - t_medium) / (t_high - t_medium)
-    elif t_high <= tdb < t_extreme:
-        risk_level_interpolated = 2.0 + (tdb - t_high) / (t_extreme - t_high)
-    elif tdb >= t_extreme:
-        risk_level_interpolated = 3.0
+        risk_level_interpolated = 2.0 + (tdb - t_medium) / (t_high - t_medium)
+    elif t_high <= tdb < extreme_entry_t:
+        risk_level_interpolated = 3.0 + (tdb - t_high) / (extreme_entry_t - t_high)
+    elif tdb >= extreme_entry_t:
+        # Scale to [4.0, 4.9] so risk reaches 4.9 exactly at extreme_entry_t + t_upper_extreme_delta.
+        # Without the 0.9 factor the formula would hit 4.9 already at +4.5°C (90% of the range).
+        risk_level_interpolated = (
+            4.0 + (tdb - extreme_entry_t) / t_upper_extreme_delta * 0.9
+        )
 
     if np.isnan(risk_level_interpolated):
         raise ValueError("Risk level could not be determined due to NaN thresholds.")
 
     # Truncate to one decimal place toward negative infinity.
-    risk_level_floor = np.floor(risk_level_interpolated * 10.0) / 10.0
+    # The 1e-9 epsilon guards against float representation of 4.9 (e.g. 4.8999…) flooring to 4.8.
+    risk_level_floor = min(
+        np.floor((risk_level_interpolated + 1e-9) * 10.0) / 10.0, 4.9
+    )
 
     # Generate recommendation based on the FLOORED risk level for consistency
     recommendation = _get_recommendation(risk_level_floor)
@@ -379,7 +396,7 @@ def _get_recommendation(risk_level: float) -> str:
     Parameters
     ----------
     risk_level : float
-        Interpolated risk level (0.0-3.0).
+        Interpolated risk level (1.0-4.9).
 
     Returns
     -------
@@ -387,11 +404,11 @@ def _get_recommendation(risk_level: float) -> str:
         Evidence-based recommendation text for managing heat stress at the given
         risk level.
     """
-    if risk_level < 1.0:
+    if risk_level < 2.0:
         return "Increase hydration & modify clothing"
-    elif risk_level < 2.0:
-        return "Increase frequency and/or duration of rest breaks"
     elif risk_level < 3.0:
+        return "Increase frequency and/or duration of rest breaks"
+    elif risk_level < 4.0:
         return "Apply active cooling strategies"
     else:
         return "Consider suspending play"
