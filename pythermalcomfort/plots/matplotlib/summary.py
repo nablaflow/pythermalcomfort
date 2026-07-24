@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import matplotlib as mpl
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -123,6 +124,35 @@ def _compute_region_percentages(
     )
     result.index = pd.Index(region_labels)
     return result
+
+
+def _compute_category_percentages(
+    categories: Sequence[str] | pd.Series | np.ndarray,
+    labels: Sequence[str],
+) -> pd.Series:
+    """Return percentage per label for a pre-computed array of category values.
+
+    Unlike ``pandas.Series.value_counts(normalize=True)``, this never silently
+    drops or renormalizes around unexpected values (including NaN) — any value
+    not present in ``labels`` raises instead of being dropped.
+    """
+    series = pd.Series(np.asarray(categories, dtype=object))
+    label_list = list(labels)
+
+    valid = series.isin(label_list)
+    if not valid.all():
+        unknown = sorted(
+            {"NaN" if pd.isna(v) else str(v) for v in series[~valid].unique()}
+        )
+        msg = (
+            f"categories contains value(s) not present in labels: {unknown}. "
+            f"Every value must match one of {label_list}."
+        )
+        raise ValueError(msg)
+
+    counts = series.value_counts().reindex(label_list, fill_value=0)
+    percentages = (counts / len(series) * 100).round(1)
+    return pd.Series(percentages.to_numpy(), index=pd.Index(label_list))
 
 
 # ── axis preparation ───────────────────────────────────────────────────────
@@ -333,10 +363,16 @@ def _default_legend_ncol(*, vertical: bool, n_labels: int) -> int:
 
 
 class SummaryPlot(BasePlot):
-    """Build and render a threshold summary plot from tabular model outputs.
+    """Build and render a summary plot from tabular model outputs.
 
-    The class works with an existing DataFrame that already contains the target
-    model output column (e.g., ``pmv`` or ``utci``).
+    Two mutually exclusive ways to configure regions are available — calling
+    one clears any configuration set by the other:
+
+    - :meth:`set_regions` — bin one continuous output column against fixed
+      thresholds (e.g. PMV thresholds at -0.5/0.5).
+    - :meth:`set_categories` — summarize an already-classified per-row
+      category array, computed however makes sense for the model at hand
+      (see :meth:`set_categories` for a worked example with adaptive comfort).
     """
 
     def __init__(self, df: pd.DataFrame) -> None:
@@ -357,6 +393,9 @@ class SummaryPlot(BasePlot):
         super().__init__()
         _validate_dataframe(df)
         self._df = df
+        self._categories: np.ndarray | None = None
+        self._category_labels: list[str] | None = None
+        self._category_colors: list[str] | None = None
 
     def set_regions(
         self,
@@ -402,6 +441,112 @@ class SummaryPlot(BasePlot):
             labels=labels,
             colors=colors,
         )
+        self._categories = None
+        self._category_labels = None
+        self._category_colors = None
+        return self
+
+    def set_categories(
+        self,
+        categories: Sequence[str] | pd.Series | np.ndarray,
+        *,
+        labels: Sequence[str],
+        colors: Sequence[str],
+    ) -> SummaryPlot:
+        """Summarize an already-classified, per-row category array.
+
+        Use this when a model's output can't be reduced to one continuous
+        column plus fixed thresholds — e.g. adaptive comfort, where
+        acceptability depends on each row's own running mean temperature.
+        Compute the categories however makes sense for the model at hand,
+        then hand the result to this method.  ``SummaryPlot`` never needs to
+        know how a category was derived.
+
+        Parameters
+        ----------
+        categories : sequence of str, Series, or ndarray
+            One category label per row of the DataFrame passed to the
+            constructor.  Every value must be present in ``labels``.
+        labels : sequence of str
+            Every category to display, in display order.  Categories with
+            zero matching rows still render at 0%.
+        colors : sequence of str
+            Color for each entry in ``labels``.  Must be the same length.
+
+        Returns
+        -------
+        SummaryPlot
+            Self, to support method chaining.
+
+        Raises
+        ------
+        ValueError
+            If ``categories`` has the wrong length, contains a value not in
+            ``labels``, or if ``labels``/``colors`` have mismatched lengths.
+
+        Examples
+        --------
+        Adaptive comfort has no single continuous column to threshold — each
+        row's acceptability depends on its own running mean temperature, so
+        the model itself returns per-row boolean acceptability fields.
+        ``np.select`` picks the narrowest (best) band each row satisfies,
+        falling back to "Outside" for rows that satisfy none:
+
+        .. code-block:: python
+
+            import numpy as np
+            from pythermalcomfort.models import adaptive_ashrae
+
+            result = adaptive_ashrae(
+                tdb=df["tdb"], tr=df["tr"], t_running_mean=df["t_rm"], v=df["v"]
+            )
+            categories = np.select(
+                [result.acceptability_90, result.acceptability_80],
+                ["90% Acceptability", "80% Acceptability"],
+                default="Outside",
+            )
+            SummaryPlot(df).set_categories(
+                categories,
+                labels=["90% Acceptability", "80% Acceptability", "Outside"],
+                colors=["#6BB3FF", "#B3D9FF", "#D9D9D9"],
+            ).plot(title="Adaptive comfort distribution (ASHRAE 55)")
+
+        The same pattern applies to any other model with its own
+        classification logic — only the ``np.select`` conditions change.
+        """
+        label_list = list(labels)
+        color_list = list(colors)
+
+        if len(set(label_list)) != len(label_list):
+            raise ValueError("labels must not contain duplicate values.")
+
+        if len(label_list) != len(color_list):
+            msg = (
+                f"labels and colors must have the same length "
+                f"(got {len(label_list)} and {len(color_list)})."
+            )
+            raise ValueError(msg)
+
+        invalid_colors = [c for c in color_list if not mcolors.is_color_like(c)]
+        if invalid_colors:
+            msg = f"Invalid color value(s): {', '.join(map(str, invalid_colors))}."
+            raise ValueError(msg)
+
+        if len(categories) != len(self._df):
+            msg = (
+                f"categories must have one value per row of the DataFrame "
+                f"(got {len(categories)}, expected {len(self._df)})."
+            )
+            raise ValueError(msg)
+
+        # Validate up front so errors surface at configuration time, not
+        # inside plot() — mirrors set_regions()'s _validate_output_values.
+        _compute_category_percentages(categories, label_list)
+
+        self._categories = np.asarray(categories, dtype=object)
+        self._category_labels = label_list
+        self._category_colors = color_list
+        self._region_config = None
         return self
 
     def plot(
@@ -414,7 +559,7 @@ class SummaryPlot(BasePlot):
         bar_kws: Mapping[str, Any] | None = None,
         legend_kws: Mapping[str, Any] | None = None,
     ) -> SummaryPlotResult:
-        """Render a threshold summary plot for the configured output column.
+        """Render a summary plot for the configured regions or categories.
 
         Parameters
         ----------
@@ -444,17 +589,33 @@ class SummaryPlot(BasePlot):
         Raises
         ------
         ValueError
-            If regions are not configured first via :meth:`set_regions`.
+            If neither :meth:`set_regions` nor :meth:`set_categories` has
+            been called first.
         """
         with mpl.rc_context(_PYTHERMALCOMFORT_RC):
-            if self._region_config is None:
-                raise ValueError(
-                    "Regions are not set. Call set_regions(...) before plot(...)."
+            if self._categories is not None:
+                percentages = _compute_category_percentages(
+                    self._categories, self._category_labels
                 )
-            rc = self._region_config
+                labels, colors = self._category_labels, self._category_colors
+            elif self._region_config is not None:
+                rc = self._region_config
+                percentages = _compute_region_percentages(
+                    self._df,
+                    output_column=rc.output_name,
+                    levels=rc.thresholds,
+                    region_labels=rc.labels,
+                )
+                labels, colors = rc.labels, rc.colors
+            else:
+                raise ValueError(
+                    "Regions are not set. Call set_regions(...) or "
+                    "set_categories(...) before plot(...)."
+                )
+
             show_region_labels = _should_show_region_labels(
                 legend=legend,
-                region_labels=rc.labels,
+                region_labels=labels,
             )
             created_figure = ax is None
 
@@ -469,20 +630,13 @@ class SummaryPlot(BasePlot):
             else:
                 fig = ax.figure
 
-            percentages = _compute_region_percentages(
-                self._df,
-                output_column=rc.output_name,
-                levels=rc.thresholds,
-                region_labels=rc.labels,
-            )
-
             _prepare_axis(ax)
             artists = _plot_summary(
                 ax,
                 vertical=vertical,
                 region_percentages=percentages,
-                region_labels=rc.labels,
-                region_colors=rc.colors,
+                region_labels=labels,
+                region_colors=colors,
                 show_region_labels=show_region_labels,
                 bar_kws=bar_kws or {},
             )
@@ -499,11 +653,11 @@ class SummaryPlot(BasePlot):
                 )
                 lg_opts.setdefault(
                     "ncol",
-                    _default_legend_ncol(vertical=vertical, n_labels=len(rc.labels)),
+                    _default_legend_ncol(vertical=vertical, n_labels=len(labels)),
                 )
                 handles = [
                     Patch(facecolor=color, label=label)
-                    for label, color in zip(rc.labels, rc.colors, strict=False)
+                    for label, color in zip(labels, colors, strict=False)
                 ]
                 legend_artist = ax.legend(handles=handles, **lg_opts)
 

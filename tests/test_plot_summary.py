@@ -286,3 +286,140 @@ def test_empty_labels_suppresses_label_text_via_thresholds(
 
     legend_texts = [t.get_text() for t in result.legend.get_texts()]
     assert legend_texts == ["", "", ""]
+
+
+# ── set_categories ──────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def categories_df() -> pd.DataFrame:
+    return pd.DataFrame({"row": range(10)})
+
+
+def test_set_categories_returns_expected_percentages(
+    categories_df: pd.DataFrame,
+) -> None:
+    categories = ["A"] * 3 + ["B"] * 7
+    result = (
+        SummaryPlot(categories_df)
+        .set_categories(
+            categories, labels=["A", "B", "C"], colors=["#111", "#222", "#333"]
+        )
+        .plot()
+    )
+
+    assert result.percentages.tolist() == [30.0, 70.0, 0.0]
+    assert list(result.percentages.index) == ["A", "B", "C"]
+
+
+def test_set_categories_zero_count_category_renders_at_zero(
+    categories_df: pd.DataFrame,
+) -> None:
+    categories = ["A"] * 10
+    result = (
+        SummaryPlot(categories_df)
+        .set_categories(categories, labels=["A", "B"], colors=["#111", "#222"])
+        .plot(legend=False)
+    )
+
+    assert result.percentages["B"] == 0.0
+
+
+def test_set_categories_rejects_length_mismatch(categories_df: pd.DataFrame) -> None:
+    with pytest.raises(ValueError, match="one value per row"):
+        SummaryPlot(categories_df).set_categories(
+            ["A"] * 9, labels=["A"], colors=["#111"]
+        )
+
+
+def test_set_categories_rejects_unknown_value(categories_df: pd.DataFrame) -> None:
+    categories = ["A"] * 9 + ["Z"]
+    with pytest.raises(ValueError, match="not present in labels"):
+        SummaryPlot(categories_df).set_categories(
+            categories, labels=["A"], colors=["#111"]
+        )
+
+
+def test_set_categories_rejects_labels_colors_length_mismatch(
+    categories_df: pd.DataFrame,
+) -> None:
+    with pytest.raises(ValueError, match="same length"):
+        SummaryPlot(categories_df).set_categories(
+            ["A"] * 10, labels=["A", "B"], colors=["#111"]
+        )
+
+
+def test_set_categories_rejects_duplicate_labels(categories_df: pd.DataFrame) -> None:
+    with pytest.raises(ValueError, match="duplicate"):
+        SummaryPlot(categories_df).set_categories(
+            ["A"] * 10, labels=["A", "A"], colors=["#111", "#222"]
+        )
+
+
+def test_set_categories_rejects_invalid_color(categories_df: pd.DataFrame) -> None:
+    with pytest.raises(ValueError, match="Invalid color"):
+        SummaryPlot(categories_df).set_categories(
+            ["A"] * 10, labels=["A"], colors=["not-a-color"]
+        )
+
+
+def test_set_categories_clears_region_config(pmv_df: pd.DataFrame) -> None:
+    sp = _new_summary(pmv_df)
+    assert sp._region_config is not None
+
+    sp.set_categories(["A", "B", "A"], labels=["A", "B"], colors=["#111", "#222"])
+    assert sp._region_config is None
+    assert sp._categories is not None
+
+
+def test_set_regions_clears_categories(pmv_df: pd.DataFrame) -> None:
+    sp = SummaryPlot(pmv_df).set_categories(
+        ["A", "B", "A"], labels=["A", "B"], colors=["#111", "#222"]
+    )
+    assert sp._categories is not None
+
+    sp.set_regions(output="pmv", thresholds=[-0.5, 0.5])
+    assert sp._categories is None
+    assert sp._category_labels is None
+    assert sp._category_colors is None
+
+
+def test_set_categories_adaptive_np_select_recipe_end_to_end() -> None:
+    """Reproduces the np.select recipe documented on set_categories()."""
+    np = pytest.importorskip("numpy")
+    from pythermalcomfort.models import adaptive_ashrae
+
+    df = pd.DataFrame(
+        {
+            "tdb": [22.0, 25.0, 30.0, 19.0],
+            "tr": [22.0, 25.0, 30.0, 19.0],
+            "t_rm": [20.0, 20.0, 20.0, 20.0],
+            "v": [0.1, 0.1, 0.1, 0.1],
+        }
+    )
+    result = adaptive_ashrae(
+        tdb=df["tdb"], tr=df["tr"], t_running_mean=df["t_rm"], v=df["v"]
+    )
+    categories = np.select(
+        [result.acceptability_90, result.acceptability_80],
+        ["90% Acceptability", "80% Acceptability"],
+        default="Outside",
+    )
+
+    plot_result = (
+        SummaryPlot(df)
+        .set_categories(
+            categories,
+            labels=["90% Acceptability", "80% Acceptability", "Outside"],
+            colors=["#6BB3FF", "#B3D9FF", "#D9D9D9"],
+        )
+        .plot(title="Adaptive comfort distribution")
+    )
+
+    # Rows 0-1 (tdb=tr=22/25) satisfy acceptability_90; rows 2-3 (tdb=tr=30/19)
+    # satisfy neither band at t_rm=20.
+    assert plot_result.percentages.to_dict() == {
+        "90% Acceptability": 50.0,
+        "80% Acceptability": 0.0,
+        "Outside": 50.0,
+    }
