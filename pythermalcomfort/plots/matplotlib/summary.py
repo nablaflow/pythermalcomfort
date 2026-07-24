@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import matplotlib as mpl
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -441,6 +442,8 @@ class SummaryPlot(BasePlot):
             colors=colors,
         )
         self._categories = None
+        self._category_labels = None
+        self._category_colors = None
         return self
 
     def set_categories(
@@ -522,6 +525,11 @@ class SummaryPlot(BasePlot):
                 f"labels and colors must have the same length "
                 f"(got {len(label_list)} and {len(color_list)})."
             )
+            raise ValueError(msg)
+
+        invalid_colors = [c for c in color_list if not mcolors.is_color_like(c)]
+        if invalid_colors:
+            msg = f"Invalid color value(s): {', '.join(map(str, invalid_colors))}."
             raise ValueError(msg)
 
         if len(categories) != len(self._df):

@@ -356,6 +356,13 @@ def test_set_categories_rejects_duplicate_labels(categories_df: pd.DataFrame) ->
         )
 
 
+def test_set_categories_rejects_invalid_color(categories_df: pd.DataFrame) -> None:
+    with pytest.raises(ValueError, match="Invalid color"):
+        SummaryPlot(categories_df).set_categories(
+            ["A"] * 10, labels=["A"], colors=["not-a-color"]
+        )
+
+
 def test_set_categories_clears_region_config(pmv_df: pd.DataFrame) -> None:
     sp = _new_summary(pmv_df)
     assert sp._region_config is not None
@@ -373,6 +380,8 @@ def test_set_regions_clears_categories(pmv_df: pd.DataFrame) -> None:
 
     sp.set_regions(output="pmv", thresholds=[-0.5, 0.5])
     assert sp._categories is None
+    assert sp._category_labels is None
+    assert sp._category_colors is None
 
 
 def test_set_categories_adaptive_np_select_recipe_end_to_end() -> None:
