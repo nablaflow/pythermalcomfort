@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from pythermalcomfort.models import solar_gain
 from tests.conftest import Urls, retrieve_reference_table, validate_result
@@ -50,6 +51,52 @@ def test_solar_gain_regression_values() -> None:
         )
         assert np.isclose(result.erf, exp_erf, atol=1e-3)
         assert np.isclose(result.delta_mrt, exp_d_mrt, atol=1e-3)
+
+
+def test_solar_gain_out_of_range_returns_nan() -> None:
+    """Test that out-of-domain sol_altitude/sharp warn and return NaN.
+
+    The fp lookup table only covers sol_altitude in [0, 90] and sharp in
+    [0, 180]; outside that range there is no valid span to look up. Regression
+    test for a case where this used to silently wrap to a plausible-looking
+    but wrong value instead of failing loudly.
+    """
+    with pytest.warns(UserWarning, match="sol_altitude"):
+        result = solar_gain(
+            sol_altitude=200,
+            sharp=90,
+            sol_radiation_dir=800,
+            sol_transmittance=0.5,
+            f_svv=0.5,
+            f_bes=0.5,
+        )
+    assert np.isnan(result.erf)
+    assert np.isnan(result.delta_mrt)
+
+    with pytest.warns(UserWarning, match="sharp"):
+        result = solar_gain(
+            sol_altitude=45,
+            sharp=300,
+            sol_radiation_dir=800,
+            sol_transmittance=0.5,
+            f_svv=0.5,
+            f_bes=0.5,
+        )
+    assert np.isnan(result.erf)
+    assert np.isnan(result.delta_mrt)
+
+    # mixed valid/invalid array: only the invalid element becomes NaN
+    with pytest.warns(UserWarning, match="sol_altitude"):
+        result = solar_gain(
+            sol_altitude=[45, 200],
+            sharp=[90, 90],
+            sol_radiation_dir=800,
+            sol_transmittance=0.5,
+            f_svv=0.5,
+            f_bes=0.5,
+        )
+    assert not np.isnan(result.erf[0])
+    assert np.isnan(result.erf[1])
 
 
 def test_solar_gain_array() -> None:

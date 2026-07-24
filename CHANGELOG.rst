@@ -1,6 +1,30 @@
 Changelog
 =========
 
+4.2.0 (2026-07-24)
+------------------
+
+* Added a ``pa`` (water vapour partial pressure) applicability check to
+  ``pmv_ppd_iso``, per the ISO 7730 Clause 4 limit of 0 Pa to 2 700 Pa. Inputs
+  outside this range (e.g. ``tdb=30``, ``rh=100`` gives ``pa`` ~4 243 Pa) now
+  return ``nan`` instead of a value outside the standard's applicability.
+* Fixed ``clo_dynamic_iso`` to estimate walking speed using the ISO 7730
+  Annex C / ISO 9920 formula for undefined walking speed
+  (``v_walk = 0.0052 * (met * 58.15 - 58)``, clipped to 0-0.7 m/s) instead of
+  reusing ``v_relative``'s activity-generated-air-speed formula, which is a
+  distinct formula intended for the whole-body PMV heat balance rather than
+  the clothing dynamic insulation correction.
+* Corrected the initial guess for clothing surface temperature in
+  ``pmv_ppd_iso`` to match the corrected Annex D formula in ISO 7730:2025
+  (``3.5 * (6.45 * icl + 0.1)``, missing the ``6.45 *`` factor present in the
+  ISO 7730:2005 Annex D listing). This only affects the starting point of the
+  iterative solver and does not change any output value.
+* Added ``"7730-2025"`` as a supported ``model`` value for ``pmv_ppd_iso``
+  and made it the default, since ISO 7730:2025 is now the current edition of
+  the standard. ``"7730-2005"`` remains supported for backwards
+  compatibility; both currently return identical results since the PMV/PPD
+  formulae are unchanged between editions.
+
 4.1.1 (2026-07-20)
 ------------------
 

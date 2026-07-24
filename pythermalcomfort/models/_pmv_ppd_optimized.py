@@ -35,7 +35,8 @@ def _pmv_ppd_optimized(tdb, tr, vr, rh, met, clo, wme):
     hc = hcf  # initialize variable
     taa = tdb + 273
     tra = tr + 273
-    t_cla = taa + (35.5 - tdb) / (3.5 * icl + 0.1)
+    # initial guess for clothing surface temperature, per ISO 7730:2025 Annex D
+    t_cla = taa + (35.5 - tdb) / (3.5 * (6.45 * icl + 0.1))
 
     p1 = icl * f_cl
     p2 = p1 * 3.96

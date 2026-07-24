@@ -145,8 +145,11 @@ def _latent_heat_vap(t):  # The latent heat of vaporization of water
     return _E0V + (_CVV - _CVL) * (t - _T_C_K) + _RGASV * t
 
 
-_P_CR = _PHI_SALT * _pv_star(_T_CR)  # core vapor pressure
-_LAT_HEAT = _latent_heat_vap(310.0)  # latent heat of vaporization at 310 K
+# .py_func calls the plain-Python version of these njit functions, so computing
+# these two module-level constants doesn't trigger numba compilation at import
+# time (which would otherwise add a noticeable, unnecessary import-time cost).
+_P_CR = _PHI_SALT * _pv_star.py_func(_T_CR)  # core vapor pressure
+_LAT_HEAT = _latent_heat_vap.py_func(310.0)  # latent heat of vaporization at 310 K
 
 
 @njit(cache=True)

@@ -569,7 +569,7 @@ class JOS3:
                 rh,
                 met,
                 clo,
-                model=Models.iso_7730_2005.value,
+                model=Models.iso_7730_2025.value,
             ).pmv
 
             # Check for NaN and handle retries
@@ -584,7 +584,7 @@ class JOS3:
                         rh,
                         met,
                         clo,
-                        model=Models.iso_7730_2005.value,
+                        model=Models.iso_7730_2025.value,
                     ).pmv
 
                     if abs(pmv_value) < tolerance:

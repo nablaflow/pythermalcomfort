@@ -32,6 +32,7 @@ class Models(Enum):
 
     ashrae_55_2023 = "55-2023"
     iso_7730_2005 = "7730-2005"
+    iso_7730_2025 = "7730-2025"
     iso_9920_2007 = "9920-2007"
     iso_7933_2004 = "7933-2004"
     iso_7933_2023 = "7933-2023"
@@ -686,7 +687,7 @@ def v_relative(
 ) -> NDArray[np.float64]:
     """Estimates the relative air speed which combines the average air speed of the
     space plus the relative air speed caused by the body movement. The same equation is
-    used in the ASHRAE 55:2023 and ISO 7730:2005 standards.
+    used in the ASHRAE 55:2023 and ISO 7730 [7730ISO2005]_ [7730ISO2025]_ standards.
 
     Parameters
     ----------
@@ -760,11 +761,20 @@ def clo_dynamic_iso(
 ) -> np.ndarray:
     """Estimates the dynamic intrinsic clothing insulation (I :sub:`cl,r`).
 
-    The activity as well as the air speed modify the insulation characteristics of the clothing.
-    Consequently, the ISO standard states that (I :sub:`cl,`) shall be corrected
-    [7730ISO2005]_. However, the ISO 7730:2005 contains insufficient information to
-    calculate (I :sub:`cl,r`). Therefore, we implemented the equations provided in the
-    ISO 9920:2007 standard [ISO9920]_.
+    The activity as well as the air speed modify the insulation characteristics of the
+    clothing. Consequently, ISO 7730 states that (I :sub:`cl,`) shall be corrected
+    [7730ISO2005]_ [7730ISO2025]_. Both editions of ISO 7730 give the correction
+    equations in their (informative) Annex C, adapted from the ISO 9920:2007 standard
+    [ISO9920]_, which is what we have implemented here.
+
+    .. note::
+        The walking speed is not a function input; it is estimated from the metabolic
+        rate using the formula given in ISO 7730 Annex C / ISO 9920 for when the actual
+        walking speed is undefined: v_walk = 0.0052 * (M - 58), clipped to 0-0.7 m/s,
+        where M is the metabolic rate in W/m2. This is a different formula from
+        :py:meth:`pythermalcomfort.utilities.v_relative`'s activity-generated air speed
+        (0.3 * (met - 1)), which is used in the whole-body PMV heat balance rather than
+        for the clothing dynamic insulation correction.
 
     Parameters
     ----------
@@ -801,7 +811,9 @@ def clo_dynamic_iso(
 
     f_cl = clo_area_factor(i_cl=clo)
     i_t = clo + i_a / f_cl
-    v_walk = v_relative(v=v, met=met) - v
+    # walking speed when undefined, per ISO 7730 Annex C / ISO 9920: vw = 0.0052 * (M - 58),
+    # clipped to [0, 0.7] m/s; M is the metabolic rate in W/m2
+    v_walk = np.clip(0.0052 * (met * met_to_w_m2 - 58), 0, 0.7)
     v_r = v_relative(v=v, met=met)
     i_t_r = clo_total_insulation(
         i_t=i_t,
