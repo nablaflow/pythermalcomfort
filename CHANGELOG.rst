@@ -1,6 +1,15 @@
 Changelog
 =========
 
+4.3.0 (2026-07-24)
+------------------
+
+* Added ``SummaryPlot.set_categories()`` for summarizing an already-classified
+  per-row category array — e.g. adaptive comfort's per-row acceptability
+  bands, which can't be reduced to one continuous column plus fixed
+  thresholds the way ``set_regions()`` handles PMV/UTCI-style outputs. See
+  the ``set_categories()`` docstring for an ``np.select``-based recipe.
+
 4.2.0 (2026-07-24)
 ------------------
 

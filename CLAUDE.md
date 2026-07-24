@@ -53,30 +53,39 @@ pre-commit run --all-files
 
 ### Release Process
 
+`bump-my-version` auto-commits and auto-tags (`commit = true`, `tag = true` in
+`.bumpversion.toml`), and correctly picks between the `Xrc{N}` and plain `X.Y.Z`
+serialize formats on its own (via `pre_n`'s `optional_value`) — so in the normal case
+you don't need to touch git yourself after running it, just push.
+
 1. **Update ``CHANGELOG.rst``** with all changes since the last release, then commit.
 
-2. **On `development`**, bump to an RC version (deploys to TestPyPI for verification):
+2. **On `development`**, cut an RC (deploys to TestPyPI for verification). Pick
+   whichever part reflects the change (`patch` / `minor` / `major`); it lands on
+   `X.Y.Zrc1` automatically:
    ```bash
-   pipenv run bump-my-version bump --new-version X.Y.Zrc1
-   git add -u && git commit -m "Bump version: A.B.C → X.Y.Zrc1"
-   git tag vX.Y.Zrc1 -m "Bump version: A.B.C → X.Y.Zrc1"
+   pipenv run bump-my-version bump minor   # or patch / major
    git push origin development --tags
    ```
-2. **Verify** the package on TestPyPI and confirm the GitHub Actions `deploy-testpypi` job passed.
-3. **Merge `development` → `master`** via PR and confirm CI passes.
-4. **Checkout master and pull**:
+3. **Verify** the package on TestPyPI and confirm the GitHub Actions `deploy-testpypi` job passed.
+4. **Found an issue and need another RC?** Just increment the RC number:
+   ```bash
+   pipenv run bump-my-version bump pre_n
+   git push origin development --tags
+   ```
+5. **Merge `development` → `master`** via PR and confirm CI passes.
+6. **Checkout master and pull**:
    ```bash
    git checkout master && git pull
    ```
-5. **Bump to the final version** (deploys to PyPI):
+7. **Finalize the release** (deploys to PyPI). This still needs an explicit target
+   since dropping the RC suffix isn't a single-word part bump:
    ```bash
    pipenv run bump-my-version bump --new-version X.Y.Z
-   git add -u && git commit -m "Bump version: X.Y.Zrc1 → X.Y.Z"
-   git tag vX.Y.Z -m "Bump version: X.Y.Zrc1 → X.Y.Z"
    git push origin master --tags
    ```
-6. **Confirm** the `Test and publish pythermalcomfort` action succeeded and the package is live on PyPI.
-7. **Sync master back into development** so the version-bump commit is not lost:
+8. **Confirm** the `Test and publish pythermalcomfort` action succeeded and the package is live on PyPI.
+9. **Sync master back into development** so the version-bump commit is not lost:
    ```bash
    git checkout development && git pull
    git merge origin/master --no-edit
@@ -85,9 +94,11 @@ pre-commit run --all-files
 
 > **Note**: RC tags (`v*rc*`) must be created from `development` — the CI workflow enforces
 > this with a `merge-base` check. Final release tags (`v*`) must be created from `master`.
-> `bump-my-version` may fail to commit if a pre-commit hook (e.g. `ruff format`)
+> `bump-my-version` may fail to auto-commit/tag if a pre-commit hook (e.g. `ruff format`)
 > modifies a file mid-commit. If that happens, stage the reformatted file manually
-> (`git add <file>`) and commit with the same message before creating the tag.
+> (`git add <file>`), commit with the message `bump-my-version` printed
+> (`Bump version: A.B.C → X.Y.Z`), and tag manually:
+> `git tag vX.Y.Z -m "Bump version: A.B.C → X.Y.Z"`.
 
 ## Architecture Overview
 
