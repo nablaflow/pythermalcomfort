@@ -514,6 +514,9 @@ class SummaryPlot(BasePlot):
         label_list = list(labels)
         color_list = list(colors)
 
+        if len(set(label_list)) != len(label_list):
+            raise ValueError("labels must not contain duplicate values.")
+
         if len(label_list) != len(color_list):
             msg = (
                 f"labels and colors must have the same length "

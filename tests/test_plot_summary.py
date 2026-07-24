@@ -349,6 +349,13 @@ def test_set_categories_rejects_labels_colors_length_mismatch(
         )
 
 
+def test_set_categories_rejects_duplicate_labels(categories_df: pd.DataFrame) -> None:
+    with pytest.raises(ValueError, match="duplicate"):
+        SummaryPlot(categories_df).set_categories(
+            ["A"] * 10, labels=["A", "A"], colors=["#111", "#222"]
+        )
+
+
 def test_set_categories_clears_region_config(pmv_df: pd.DataFrame) -> None:
     sp = _new_summary(pmv_df)
     assert sp._region_config is not None
@@ -400,4 +407,10 @@ def test_set_categories_adaptive_np_select_recipe_end_to_end() -> None:
         .plot(title="Adaptive comfort distribution")
     )
 
-    assert plot_result.percentages.sum() == 100.0
+    # Rows 0-1 (tdb=tr=22/25) satisfy acceptability_90; rows 2-3 (tdb=tr=30/19)
+    # satisfy neither band at t_rm=20.
+    assert plot_result.percentages.to_dict() == {
+        "90% Acceptability": 50.0,
+        "80% Acceptability": 0.0,
+        "Outside": 50.0,
+    }
