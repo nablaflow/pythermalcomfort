@@ -1,8 +1,8 @@
 Changelog
 =========
 
-Unreleased
-----------
+4.3.0 (2026-07-24)
+------------------
 
 * Added ``SummaryPlot.set_categories()`` for summarizing an already-classified
   per-row category array — e.g. adaptive comfort's per-row acceptability
