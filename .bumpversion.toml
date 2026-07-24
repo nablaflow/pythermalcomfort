@@ -13,6 +13,7 @@ commit_message = "Bump version: {current_version} → {new_version}"
 
 [tool.bumpversion.parts.pre_n]
 first_value = 1
+optional_value = "0"
 
 [[tool.bumpversion.files]]
 filename = "pythermalcomfort/__init__.py"
