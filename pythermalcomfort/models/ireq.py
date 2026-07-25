@@ -147,7 +147,7 @@ def ireq(
     results = {}
 
     calculation_criteria = (
-        ("min", 33.34 - 0.0354 * met, np.full_like(met, 0.06)),
+        ("min", 33.34 - 0.0354 * met, 0.06),
         ("neutral", 35.7 - 0.0285 * met, 0.001 * met),
     )
 
