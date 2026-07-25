@@ -174,6 +174,14 @@ Humidex
 .. autoclass:: pythermalcomfort.classes_return.Humidex
     :members:
 
+Required Clothing Insulation (IREQ) and Duration Limited Exposure (DLE)
+-----------------------------------------------------------------------
+
+.. autofunction:: pythermalcomfort.models.ireq.ireq
+
+.. autoclass:: pythermalcomfort.classes_return.IREQ
+    :members:
+
 Joint system thermoregulation model (JOS-3)
 -------------------------------------------
 

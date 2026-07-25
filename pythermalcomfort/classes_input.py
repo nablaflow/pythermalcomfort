@@ -1258,3 +1258,88 @@ class SportsHeatStressInputs(BaseInputs):
         # Validate air speed is non-negative
         if np.any(vr < 0):
             raise ValueError("Relative air speed (vr) must be non-negative.")
+
+
+@dataclass
+class IREQInputs(BaseInputs):
+    p: float | int | np.ndarray | list = field(
+        default=None, metadata={"types": (float, int, np.ndarray, list)}
+    )
+    walk_sp: float | int | np.ndarray | list = field(
+        default=None, metadata={"types": (float, int, np.ndarray, list)}
+    )
+
+    def __init__(
+        self,
+        tdb,
+        tr,
+        vr,
+        rh,
+        met,
+        clo,
+        p,
+        walk_sp,
+        wme=0,
+        limit_inputs=True,
+        round_output=True,
+    ):
+        self.p = p
+        self.walk_sp = walk_sp
+        super().__init__(
+            tdb=tdb,
+            tr=tr,
+            vr=vr,
+            rh=rh,
+            met=met,
+            clo=clo,
+            wme=wme,
+            limit_inputs=limit_inputs,
+            round_output=round_output,
+        )
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        values = {
+            "tdb": self.tdb,
+            "tr": self.tr,
+            "vr": self.vr,
+            "rh": self.rh,
+            "met": self.met,
+            "clo": self.clo,
+            "p": self.p,
+            "walk_sp": self.walk_sp,
+            "wme": self.wme,
+        }
+        arrays = {
+            name: np.atleast_1d(np.asarray(value, dtype=float))
+            for name, value in values.items()
+        }
+
+        try:
+            broadcasted = np.broadcast_arrays(*arrays.values())
+        except ValueError as err:
+            raise ValueError(
+                "IREQ inputs are not broadcastable to a common shape."
+            ) from err
+
+        for name, value in zip(arrays.keys(), broadcasted, strict=True):
+            if np.any(~np.isfinite(value)):
+                msg = f"{name} must contain finite values."
+                raise ValueError(msg)
+            setattr(self, name, value.astype(float))
+
+        if np.any(self.met <= 0):
+            raise ValueError("Metabolic rate (met) must be greater than 0.")
+        if np.any(self.wme < 0):
+            raise ValueError("External work (wme) must be non-negative.")
+        if np.any(self.p <= 0):
+            raise ValueError("Air permeability (p) must be greater than 0.")
+        if np.any(self.vr < 0):
+            raise ValueError("Relative air speed (vr) must be non-negative.")
+        if np.any(self.walk_sp < 0):
+            raise ValueError("Walking speed (walk_sp) must be non-negative.")
+        if np.any(self.rh < 0) or np.any(self.rh > 100):
+            raise ValueError("Relative humidity (rh) must be between 0 and 100.")
+        if np.any(self.clo < 0):
+            raise ValueError("Clothing insulation (clo) must be non-negative.")
