@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import math
+
 import numpy as np
+from numba import njit
 
 from pythermalcomfort.classes_input import IREQInputs
 from pythermalcomfort.classes_return import IREQ
@@ -141,18 +144,6 @@ def ireq(
     )
 
     clo_m2c_w = clo * 0.155
-    air_insulation = 0.092 * np.exp(-0.15 * vr - 0.22 * walk_sp) - 0.0045
-    constant_part = _clothing_constant_part(p=p, vr=vr, walk_sp=walk_sp)
-
-    expired_air_temperature = 29.0 + 0.2 * tdb
-    expired_air_vapor_pressure = 0.1333 * np.exp(
-        18.6686 - 4030.183 / (expired_air_temperature + 235.0)
-    )
-    ambient_vapor_pressure = (
-        (rh / 100.0) * 0.1333 * np.exp(18.6686 - 4030.183 / (tdb + 235.0))
-    )
-
-    ar_adu = 0.77
     results = {}
 
     calculation_criteria = (
@@ -161,186 +152,11 @@ def ireq(
     )
 
     for suffix, skin_temperature, wetness in calculation_criteria:
-        skin_saturated_pressure = 0.1333 * np.exp(
-            18.6686 - 4030.183 / (skin_temperature + 235.0)
+        ireq_final, icl_raw, dle = _solve_ireq_criterion(
+            tdb, tr, met, wme, vr, walk_sp, p, clo_m2c_w, rh, skin_temperature, wetness
         )
-
-        ireq_clo = np.full_like(met, 0.5)
-        factor = np.full_like(met, 0.5)
-        balance = np.full_like(met, 1.0)
-
-        for _ in range(150):
-            active = np.abs(balance) > 0.01
-            if not np.any(active):
-                break
-
-            fcl = 1.0 + 1.197 * ireq_clo
-            total_evaporative_resistance = (0.06 / 0.38) * (air_insulation + ireq_clo)
-            evaporative_heat_loss = (
-                wetness
-                * (skin_saturated_pressure - ambient_vapor_pressure)
-                / total_evaporative_resistance
-            )
-            respiratory_heat_loss = 1.73e-02 * met * (
-                expired_air_vapor_pressure - ambient_vapor_pressure
-            ) + 1.4e-03 * met * (expired_air_temperature - tdb)
-
-            clothing_temperature = skin_temperature - ireq_clo * (
-                met - wme - evaporative_heat_loss - respiratory_heat_loss
-            )
-            clothing_temperature_k = 273.0 + clothing_temperature
-            tr_k = 273.0 + tr
-
-            delta_t = clothing_temperature - tr
-            delta_t_safe = np.where(np.abs(delta_t) < 1e-4, 1e-4, delta_t)
-            hr_norm = (
-                5.67e-08 * 0.95 * ar_adu * (clothing_temperature_k**4 - tr_k**4)
-            ) / delta_t_safe
-            hr_fallback = (
-                5.67e-08
-                * 0.95
-                * ar_adu
-                * 4
-                * (273.0 + (clothing_temperature + tr) / 2.0) ** 3
-            )
-            radiation_coefficient = np.where(
-                np.abs(delta_t) < 1e-4,
-                hr_fallback,
-                hr_norm,
-            )
-
-            convection_coefficient = 1.0 / air_insulation - radiation_coefficient
-            radiation_heat_loss = (
-                fcl * radiation_coefficient * (clothing_temperature - tr)
-            )
-            convective_heat_loss = (
-                fcl * convection_coefficient * (clothing_temperature - tdb)
-            )
-
-            balance = (
-                met
-                - wme
-                - evaporative_heat_loss
-                - respiratory_heat_loss
-                - radiation_heat_loss
-                - convective_heat_loss
-            )
-
-            cond = balance > 0
-            ireq_clo_new = np.where(cond, ireq_clo - factor, ireq_clo + factor)
-            factor_new = np.where(cond, factor / 2.0, factor)
-
-            ireq_clo = np.where(active, ireq_clo_new, ireq_clo)
-            factor = np.where(active, factor_new, factor)
-
-        ireq_final = (skin_temperature - clothing_temperature) / (
-            radiation_heat_loss + convective_heat_loss
-        )
-
-        clothing_temperature_storage = np.copy(tdb)
-        storage = np.full_like(met, -40.0)
-        storage_factor = np.full_like(met, 500.0)
-        resultant_clothing_insulation = np.copy(clo_m2c_w)
-        storage_balance = np.full_like(met, 1.0)
-
-        for _ in range(150):
-            active_storage = np.abs(storage_balance) > 0.01
-            if not np.any(active_storage):
-                break
-
-            fcl_storage = 1.0 + 1.197 * resultant_clothing_insulation
-            resultant_clothing_insulation = (
-                clo_m2c_w + 0.085 / fcl_storage
-            ) * constant_part - air_insulation / fcl_storage
-
-            total_evaporative_resistance = (0.06 / 0.38) * (
-                air_insulation + resultant_clothing_insulation
-            )
-            evaporative_heat_loss = (
-                wetness
-                * (skin_saturated_pressure - ambient_vapor_pressure)
-                / total_evaporative_resistance
-            )
-            respiratory_heat_loss = 1.73e-02 * met * (
-                expired_air_vapor_pressure - ambient_vapor_pressure
-            ) + 1.4e-03 * met * (expired_air_temperature - tdb)
-
-            clothing_temperature_storage = skin_temperature - (
-                resultant_clothing_insulation
-                * (met - wme - evaporative_heat_loss - respiratory_heat_loss - storage)
-            )
-            clothing_temperature_k = 273.0 + clothing_temperature_storage
-            tr_k = 273.0 + tr
-
-            delta_t = clothing_temperature_storage - tr
-            delta_t_safe = np.where(np.abs(delta_t) < 1e-4, 1e-4, delta_t)
-            hr_norm_storage = (
-                5.67e-08 * 0.95 * ar_adu * (clothing_temperature_k**4 - tr_k**4)
-            ) / delta_t_safe
-            hr_fallback_storage = (
-                5.67e-08
-                * 0.95
-                * ar_adu
-                * 4
-                * (273.0 + (clothing_temperature_storage + tr) / 2.0) ** 3
-            )
-            radiation_coefficient_storage = np.where(
-                np.abs(delta_t) < 1e-4,
-                hr_fallback_storage,
-                hr_norm_storage,
-            )
-
-            convection_coefficient_storage = (
-                1.0 / air_insulation - radiation_coefficient_storage
-            )
-            radiation_heat_loss_storage = (
-                fcl_storage
-                * radiation_coefficient_storage
-                * (clothing_temperature_storage - tr)
-            )
-            convective_heat_loss_storage = (
-                fcl_storage
-                * convection_coefficient_storage
-                * (clothing_temperature_storage - tdb)
-            )
-
-            storage_balance = (
-                met
-                - wme
-                - evaporative_heat_loss
-                - respiratory_heat_loss
-                - radiation_heat_loss_storage
-                - convective_heat_loss_storage
-                - storage
-            )
-
-            cond_storage = storage_balance > 0
-            storage_new = np.where(
-                cond_storage,
-                storage + storage_factor,
-                storage - storage_factor,
-            )
-            storage_factor_new = np.where(
-                cond_storage,
-                storage_factor / 2.0,
-                storage_factor,
-            )
-
-            storage = np.where(active_storage, storage_new, storage)
-            storage_factor = np.where(
-                active_storage,
-                storage_factor_new,
-                storage_factor,
-            )
-
-        with np.errstate(divide="ignore", invalid="ignore"):
-            dle = -40.0 / storage
 
         ireq_out = ireq_final / 0.155
-        fcl_final = 1.0 + 1.197 * ireq_final
-        icl_raw = (ireq_final + air_insulation / fcl_final) / constant_part - (
-            0.085 / fcl_final
-        )
         icl_out = icl_raw / 0.155
 
         non_physical = (ireq_out < 0) | (icl_out < 0)
@@ -373,11 +189,204 @@ def ireq(
     )
 
 
+@njit(cache=True)
 def _clothing_constant_part(p, vr, walk_sp):
     """Compute the ISO 11079 Annex A wind/permeability correction factor shared by the
     total and resultant clothing insulation calculations."""
     return (
-        0.54 * np.exp(-0.15 * vr - 0.22 * walk_sp) * (p**0.075) - 0.06 * np.log(p) + 0.5
+        0.54 * math.exp(-0.15 * vr - 0.22 * walk_sp) * (p**0.075)
+        - 0.06 * math.log(p)
+        + 0.5
+    )
+
+
+@njit(cache=True)
+def _solve_single_criterion(
+    tdb, tr, met, wme, vr, walk_sp, p, clo_m2c_w, rh, skin_temperature, wetness
+):
+    """Solve the ISO 11079 Annex A thermal balance for one physiological criterion
+    (minimal or neutral), returning IREQ, ICL, and DLE in m2.K/W and hours.
+
+    This mirrors the array-vectorized version of the same solve, but works on plain
+    floats so it can be JIT-compiled with Numba: each element gets its own
+    early-converging loop instead of the whole array running the full iteration
+    budget.
+    """
+    ar_adu = 0.77
+    air_insulation = 0.092 * math.exp(-0.15 * vr - 0.22 * walk_sp) - 0.0045
+    constant_part = _clothing_constant_part(p, vr, walk_sp)
+
+    expired_air_temperature = 29.0 + 0.2 * tdb
+    expired_air_vapor_pressure = 0.1333 * math.exp(
+        18.6686 - 4030.183 / (expired_air_temperature + 235.0)
+    )
+    ambient_vapor_pressure = (
+        (rh / 100.0) * 0.1333 * math.exp(18.6686 - 4030.183 / (tdb + 235.0))
+    )
+    skin_saturated_pressure = 0.1333 * math.exp(
+        18.6686 - 4030.183 / (skin_temperature + 235.0)
+    )
+    tr_k = 273.0 + tr
+
+    ireq_clo = 0.5
+    factor = 0.5
+    balance = 1.0
+    clothing_temperature = 0.0
+    radiation_heat_loss = 0.0
+    convective_heat_loss = 0.0
+
+    for _ in range(150):
+        if abs(balance) <= 0.01:
+            break
+
+        fcl = 1.0 + 1.197 * ireq_clo
+        total_evaporative_resistance = (0.06 / 0.38) * (air_insulation + ireq_clo)
+        evaporative_heat_loss = (
+            wetness
+            * (skin_saturated_pressure - ambient_vapor_pressure)
+            / total_evaporative_resistance
+        )
+        respiratory_heat_loss = 1.73e-02 * met * (
+            expired_air_vapor_pressure - ambient_vapor_pressure
+        ) + 1.4e-03 * met * (expired_air_temperature - tdb)
+
+        clothing_temperature = skin_temperature - ireq_clo * (
+            met - wme - evaporative_heat_loss - respiratory_heat_loss
+        )
+        clothing_temperature_k = 273.0 + clothing_temperature
+
+        delta_t = clothing_temperature - tr
+        if abs(delta_t) < 1e-4:
+            radiation_coefficient = (
+                5.67e-08
+                * 0.95
+                * ar_adu
+                * 4
+                * (273.0 + (clothing_temperature + tr) / 2.0) ** 3
+            )
+        else:
+            radiation_coefficient = (
+                5.67e-08 * 0.95 * ar_adu * (clothing_temperature_k**4 - tr_k**4)
+            ) / delta_t
+
+        convection_coefficient = 1.0 / air_insulation - radiation_coefficient
+        radiation_heat_loss = fcl * radiation_coefficient * (clothing_temperature - tr)
+        convective_heat_loss = (
+            fcl * convection_coefficient * (clothing_temperature - tdb)
+        )
+
+        balance = (
+            met
+            - wme
+            - evaporative_heat_loss
+            - respiratory_heat_loss
+            - radiation_heat_loss
+            - convective_heat_loss
+        )
+
+        if balance > 0:
+            ireq_clo -= factor
+            factor /= 2.0
+        else:
+            ireq_clo += factor
+
+    ireq_final = (skin_temperature - clothing_temperature) / (
+        radiation_heat_loss + convective_heat_loss
+    )
+
+    storage = -40.0
+    storage_factor = 500.0
+    resultant_clothing_insulation = clo_m2c_w
+    storage_balance = 1.0
+
+    for _ in range(150):
+        if abs(storage_balance) <= 0.01:
+            break
+
+        fcl_storage = 1.0 + 1.197 * resultant_clothing_insulation
+        resultant_clothing_insulation = (
+            clo_m2c_w + 0.085 / fcl_storage
+        ) * constant_part - air_insulation / fcl_storage
+
+        total_evaporative_resistance = (0.06 / 0.38) * (
+            air_insulation + resultant_clothing_insulation
+        )
+        evaporative_heat_loss = (
+            wetness
+            * (skin_saturated_pressure - ambient_vapor_pressure)
+            / total_evaporative_resistance
+        )
+        respiratory_heat_loss = 1.73e-02 * met * (
+            expired_air_vapor_pressure - ambient_vapor_pressure
+        ) + 1.4e-03 * met * (expired_air_temperature - tdb)
+
+        clothing_temperature_storage = skin_temperature - (
+            resultant_clothing_insulation
+            * (met - wme - evaporative_heat_loss - respiratory_heat_loss - storage)
+        )
+        clothing_temperature_k = 273.0 + clothing_temperature_storage
+
+        delta_t = clothing_temperature_storage - tr
+        if abs(delta_t) < 1e-4:
+            radiation_coefficient_storage = (
+                5.67e-08
+                * 0.95
+                * ar_adu
+                * 4
+                * (273.0 + (clothing_temperature_storage + tr) / 2.0) ** 3
+            )
+        else:
+            radiation_coefficient_storage = (
+                5.67e-08 * 0.95 * ar_adu * (clothing_temperature_k**4 - tr_k**4)
+            ) / delta_t
+
+        convection_coefficient_storage = (
+            1.0 / air_insulation - radiation_coefficient_storage
+        )
+        radiation_heat_loss_storage = (
+            fcl_storage
+            * radiation_coefficient_storage
+            * (clothing_temperature_storage - tr)
+        )
+        convective_heat_loss_storage = (
+            fcl_storage
+            * convection_coefficient_storage
+            * (clothing_temperature_storage - tdb)
+        )
+
+        storage_balance = (
+            met
+            - wme
+            - evaporative_heat_loss
+            - respiratory_heat_loss
+            - radiation_heat_loss_storage
+            - convective_heat_loss_storage
+            - storage
+        )
+
+        if storage_balance > 0:
+            storage += storage_factor
+            storage_factor /= 2.0
+        else:
+            storage -= storage_factor
+
+    dle = math.inf if storage == 0.0 else -40.0 / storage
+
+    fcl_final = 1.0 + 1.197 * ireq_final
+    icl_raw = (ireq_final + air_insulation / fcl_final) / constant_part - (
+        0.085 / fcl_final
+    )
+
+    return ireq_final, icl_raw, dle
+
+
+@np.vectorize
+def _solve_ireq_criterion(
+    tdb, tr, met, wme, vr, walk_sp, p, clo_m2c_w, rh, skin_temperature, wetness
+):
+    """Vectorize the Numba-compiled single-criterion solver over array inputs."""
+    return _solve_single_criterion(
+        tdb, tr, met, wme, vr, walk_sp, p, clo_m2c_w, rh, skin_temperature, wetness
     )
 
 
