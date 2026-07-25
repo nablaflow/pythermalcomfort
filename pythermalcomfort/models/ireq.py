@@ -380,7 +380,7 @@ def _solve_single_criterion(
     return ireq_final, icl_raw, dle
 
 
-@np.vectorize
+@np.vectorize(otypes=[float, float, float])
 def _solve_ireq_criterion(
     tdb, tr, met, wme, vr, walk_sp, p, clo_m2c_w, rh, skin_temperature, wetness
 ):
