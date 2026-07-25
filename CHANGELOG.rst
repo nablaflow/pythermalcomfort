@@ -1,6 +1,12 @@
 Changelog
 =========
 
+4.4.0 (2026-07-25)
+------------------
+
+* Added ``ireq`` model to calculate Required Clothing Insulation (IREQ) and
+  Duration Limited Exposure (DLE) based on ISO 11079.
+
 4.3.0 (2026-07-24)
 ------------------
 

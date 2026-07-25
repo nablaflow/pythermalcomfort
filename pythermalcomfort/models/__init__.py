@@ -10,6 +10,7 @@ from .heat_index_lu import heat_index_lu
 from .heat_index_rothfusz import heat_index_rothfusz
 from .heat_index_schoen import heat_index_schoen
 from .humidex import humidex
+from .ireq import ireq
 from .jos3 import JOS3
 from .net import net
 from .pet_steady import pet_steady
@@ -53,6 +54,7 @@ __all__ = [
     "heat_index_rothfusz",
     "heat_index_schoen",
     "humidex",
+    "ireq",
     "net",
     "pet_steady",
     "phs",
