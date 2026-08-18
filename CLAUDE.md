@@ -58,6 +58,13 @@ pre-commit run --all-files
 serialize formats on its own (via `pre_n`'s `optional_value`) — so in the normal case
 you don't need to touch git yourself after running it, just push.
 
+0. **Check the `validation-data-comfort-models` pin is current.** `tests/conftest.py`'s
+   `unit_test_data_prefix` is pinned to a tag of that repo, not `main`. Compare it against
+   [that repo's latest tag](https://github.com/FedericoTartarini/validation-data-comfort-models/tags)
+   and its `CHANGELOG.md`; if behind, bump the pin and re-run the affected tests before
+   proceeding. See `CONTRIBUTING.rst`'s "Keeping the validation-data-comfort-models pin
+   current" for details — don't ship a release still pointed at a stale tag.
+
 1. **Update ``CHANGELOG.rst``** with all changes since the last release, then commit.
 
 2. **On `development`**, cut an RC (deploys to TestPyPI for verification). Pick
