@@ -1,8 +1,8 @@
 Changelog
 =========
 
-Unreleased
-----------
+4.4.1 (2026-08-18)
+------------------
 
 * Fixed the ``phs`` applicability limits (`#225 <https://github.com/pythermalcomfort/pythermalcomfort/issues/225>`_):
     - the ``tr`` limit is now checked against ``ISO 7933 Annex A, Table A.1``'s actual
