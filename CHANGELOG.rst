@@ -1,6 +1,20 @@
 Changelog
 =========
 
+4.4.1 (2026-08-18)
+------------------
+
+* Fixed the ``phs`` applicability limits (`#225 <https://github.com/pythermalcomfort/pythermalcomfort/issues/225>`_):
+    - the ``tr`` limit is now checked against ``ISO 7933 Annex A, Table A.1``'s actual
+      ``0 < (tr - tdb) < 60`` range, instead of checking raw ``tr`` against ``(0, 60)``.
+    - the metabolic rate limit is now standard-specific: ``100-450 W/m2`` (1.7-7.5 met)
+      for the 2004 standard, ``56-250 W/m2`` (0.96-4.3 met) for the 2023 standard,
+      instead of always using the 2004 range.
+* Added the ISO 7933:2023 Annex E minute-1 skin temperature special case to the
+  ``phs`` 2023 model (``t_sk`` is forced to its equilibrium value on the first
+  minute), matching the standard's own reference program. This special case is
+  not present in the 2004 edition.
+
 4.4.0 (2026-07-25)
 ------------------
 
