@@ -1,6 +1,17 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+* Pinned ``tests/conftest.py``'s ``validation-data-comfort-models`` fixture URL to the
+  ``v1.0.0`` tag instead of ``main``, so upstream fixture changes can't silently affect
+  CI before the pin is deliberately bumped and reviewed. See ``CONTRIBUTING.rst``'s
+  "Keeping the validation-data-comfort-models pin current" section.
+* Addressed Copilot review feedback on the 4.4.1 ``phs`` fix: pass ``param_name``
+  explicitly to ``valid_range()`` for the ``(tr - tdb)`` check, and added regression
+  tests for the applicability-limit and minute-1 skin-temperature behavior.
+
 4.4.1 (2026-08-18)
 ------------------
 
