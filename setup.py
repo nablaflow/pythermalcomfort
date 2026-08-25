@@ -102,7 +102,7 @@ setup(
     install_requires=[
         "scipy",
         "numba",
-        "numpy>=1.21,<2.3",
+        "numpy>=1.21,<3.0",
         "setuptools",
     ],
     extras_require={
